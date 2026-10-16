@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CleanBot Sim 2.0</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="loginOverlay" class="overlay">
+    <form id="loginForm" class="login-card">
+      <div class="brand-mark">CB</div>
+      <h1>CleanBot Sim 2.0</h1>
+      <p>Simulación funcional para limpieza y desinfección automatizada</p>
+      <label>Usuario<input id="loginUser" value="operador" autocomplete="username" required></label>
+      <label>Contraseña<input id="loginPass" type="password" value="demo123" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Ingresar</button>
+      <small>Demo: operador / demo123 · admin / admin123 · observador / view123</small>
+      <div id="loginError" class="error"></div>
+    </form>
+  </div>
+
+  <header class="topbar">
+    <div>
+      <h1>CleanBot Sim 2.0</h1>
+      <p>Prueba de concepto digital · Reto 3</p>
+    </div>
+    <div class="userbox">
+      <div><strong id="userName">—</strong><span id="userRole">—</span></div>
+      <button id="logoutBtn" class="ghost">Salir</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="panel config-panel">
+      <div class="section-head">
+        <div><h2>Configuración de la misión</h2><p>Selecciona escenario, modo y algoritmo de navegación.</p></div>
+        <span id="permissionBadge" class="badge">—</span>
+      </div>
+      <div class="config-grid">
+        <label>Escenario
+          <select id="scenarioSelect">
+            <option value="hospital">Hospital</option>
+            <option value="industry">Industria</option>
+            <option value="warehouse">Bodega</option>
+          </select>
+        </label>
+        <label>Modo
+          <select id="modeSelect">
+            <option value="auto">Automático</option>
+            <option value="manual">Manual por teclado</option>
+          </select>
+        </label>
+        <label>Algoritmo
+          <select id="algorithmSelect">
+            <option value="astar">A*</option>
+            <option value="dijkstra">Dijkstra</option>
+          </select>
+        </label>
+        <label>Velocidad
+          <select id="speedSelect">
+            <option value="1">Normal</option>
+            <option value="1.5">Rápida</option>
+            <option value="0.65">Lenta</option>
+          </select>
+        </label>
+      </div>
+      <div class="toolbar">
+        <button id="startBtn" class="primary">▶ Iniciar misión</button>
+        <button id="pauseBtn">⏸ Pausar</button>
+        <button id="resetBtn">↻ Reiniciar</button>
+        <button id="sprayBtn">💧 Pulverización AUTO</button>
+        <button id="saveReportBtn">💾 Guardar reporte</button>
+      </div>
+      <p class="hint">Modo manual: usa <b>WASD</b> o <b>flechas</b>; mantén <b>Espacio</b> para pulverizar. En automático, haz clic en el mapa para fijar un destino o pulsa “Iniciar misión” para generar una ruta de cobertura.</p>
+    </section>
+
+    <section class="main-grid">
+      <div class="panel simulation-panel">
+        <div class="section-head compact">
+          <div><h2 id="scenarioTitle">Hospital</h2><p id="scenarioDescription">Área clínica simulada.</p></div>
+          <div class="legend"><span><i class="dot robot"></i>Robot</span><span><i class="dot route"></i>Ruta</span><span><i class="dot obstacle"></i>Obstáculo</span><span><i class="dot clean"></i>Cubierto</span></div>
+        </div>
+        <div class="canvas-wrap"><canvas id="simCanvas" width="960" height="560"></canvas></div>
+      </div>
+
+      <aside class="panel telemetry-panel">
+        <h2>Telemetría</h2>
+        <div class="status-line"><span>Estado</span><strong id="statusValue">Listo</strong></div>
+        <div class="progress-row"><span>Cobertura <b id="coverageValue">0%</b></span><div class="progress"><div id="coverageBar"></div></div></div>
+        <div class="metric-grid">
+          <div class="metric"><span>Tiempo</span><strong id="timeValue">00:00</strong></div>
+          <div class="metric"><span>Distancia</span><strong id="distanceValue">0.0 m</strong></div>
+          <div class="metric"><span>Obstáculos</span><strong id="obstacleValue">0</strong></div>
+          <div class="metric"><span>Pulverización</span><strong id="sprayValue">OFF</strong></div>
+          <div class="metric"><span>Batería</span><strong id="batteryValue">100%</strong></div>
+          <div class="metric"><span>Tanque</span><strong id="tankValue">100%</strong></div>
+        </div>
+
+        <h3>Sensores simulados</h3>
+        <div class="sensor-list">
+          <div><span>Ultrasónico frontal</span><b id="frontSensor">— cm</b></div>
+          <div><span>Ultrasónico izquierdo</span><b id="leftSensor">— cm</b></div>
+          <div><span>Ultrasónico derecho</span><b id="rightSensor">— cm</b></div>
+          <div><span>Temperatura</span><b id="tempSensor">— °C</b></div>
+          <div><span>Humedad</span><b id="humiditySensor">— %</b></div>
+          <div><span>VOC / aire</span><b id="vocSensor">—</b></div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="lower-grid">
+      <div class="panel">
+        <div class="section-head compact"><div><h2>Trazabilidad en vivo</h2><p>Eventos generados durante la simulación.</p></div><button id="clearLogBtn" class="ghost">Limpiar</button></div>
+        <div class="table-wrap short"><table><thead><tr><th>Hora</th><th>Evento</th><th>Detalle</th></tr></thead><tbody id="eventLog"></tbody></table></div>
+      </div>
+
+      <div class="panel">
+        <div class="section-head compact"><div><h2>Reportes guardados</h2><p>Persistidos en SQLite.</p></div><button id="downloadReportsBtn" class="ghost">CSV</button></div>
+        <div class="table-wrap short"><table><thead><tr><th>ID</th><th>Escenario</th><th>Cobertura</th><th>Usuario</th><th>Fecha</th></tr></thead><tbody id="reportsTable"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="adminPanel" class="panel admin-panel hidden">
+      <div class="section-head"><div><h2>Administración de usuarios</h2><p>Crea operadores, observadores o administradores.</p></div></div>
+      <form id="userForm" class="user-form">
+        <input id="newFullName" placeholder="Nombre completo" required>
+        <input id="newUsername" placeholder="Usuario" required>
+        <input id="newPassword" type="password" placeholder="Contraseña (mín. 6)" required>
+        <select id="newRole"><option value="operator">Operador</option><option value="observer">Observador</option><option value="admin">Administrador</option></select>
+        <button class="primary" type="submit">Crear usuario</button>
+      </form>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Creado</th></tr></thead><tbody id="usersTable"></tbody></table></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
