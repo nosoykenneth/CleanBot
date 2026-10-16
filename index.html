@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CleanBot | Robot móvil de limpieza y desinfección</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script type="importmap">
+    { "imports": { "three": "./node_modules/three/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="loginOverlay" class="overlay">
+    <form id="loginForm" class="login-card">
+      <div class="brand-mark">C+</div>
+      <h1>CleanBot Sim</h1>
+      <p>Acceso a la simulación 3D y consola de operación</p>
+      <label>Usuario<input id="loginUser" value="operador" autocomplete="username" required></label>
+      <label>Contraseña<input id="loginPass" type="password" value="demo123" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Ingresar</button>
+      <small>Demo: operador / demo123 · admin / admin123 · observador / view123</small>
+      <div id="loginError" class="error" role="alert"></div>
+    </form>
+  </div>
+  <header class="topbar">
+    <a class="brand" href="#inicio" aria-label="CleanBot, inicio"><span class="brand-mark">C<span>+</span></span><span>clean<span class="brand-light">bot</span></span></a>
+    <div class="topbar-meta"><span class="live-indicator"></span> PROPUESTA DE INNOVACIÓN <span class="topbar-divider"></span> HACKATHON 2026</div>
+    <div class="topbar-actions"><a class="topbar-link" href="#propuesta">Ver propuesta <span aria-hidden="true">↗</span></a><span class="user-pill"><strong id="userName">—</strong><small id="userRole">—</small></span><button id="logoutBtn" class="logout-btn" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">Salir</button></div>
+  </header>
+
+  <main id="inicio">
+    <section class="intro">
+      <div class="intro-copy">
+        <p class="eyebrow">ROBÓTICA APLICADA · SEGURIDAD LABORAL</p>
+        <h1>Menos exposición.<br /><span>Más control.</span></h1>
+        <p class="intro-text">Un robot móvil inteligente y modular para automatizar limpieza y desinfección en zonas de riesgo. Esta maqueta interactiva muestra cómo podría operar el prototipo.</p>
+        <a class="intro-cta" href="#demo">Explorar simulación <span aria-hidden="true">↓</span></a>
+      </div>
+      <div class="intro-note"><span class="note-number">01</span><p>PRUEBA DE CONCEPTO<br /><strong>Representación digital, no hardware construido</strong></p></div>
+    </section>
+
+    <section id="demo" class="layout">
+    <section class="panel config-panel">
+      <div class="panel-header">
+        <div><div class="section-kicker">MISIÓN</div><h2>Configuración de operación</h2><p>Define el entorno y la estrategia de navegación.</p></div>
+        <span id="permissionBadge" class="badge">—</span>
+      </div>
+      <div class="config-grid">
+        <label>Escenario<select id="scenarioSelect"><option value="hospital">Hospital</option><option value="industry">Industria</option><option value="warehouse">Bodega</option></select></label>
+        <label>Modo<select id="modeSelect"><option value="auto">Automático</option><option value="manual">Manual por teclado</option></select></label>
+        <label>Algoritmo<select id="algorithmSelect"><option value="astar">A*</option><option value="dijkstra">Dijkstra</option></select></label>
+        <label>Velocidad<select id="speedSelect"><option value="1">Normal</option><option value="1.5">Rápida</option><option value="0.65">Lenta</option></select></label>
+      </div>
+      <p class="control-hint">En modo manual usa WASD o las flechas. Mantén Espacio para pulverizar cuando el modo esté en AUTO.</p>
+    </section>
+    <section class="panel simulation-panel">
+      <div class="panel-header">
+        <div>
+          <div class="section-kicker">ENTORNO 3D · ÁREA DE DEMOSTRACIÓN</div>
+          <h2 id="scenarioTitle">Unidad de desinfección móvil</h2>
+          <p id="scenarioDescription">Recorrido autónomo conceptual en una habitación de riesgo.</p>
+        </div>
+        <div class="legend">
+          <span><i class="dot robot-dot"></i> CleanBot</span>
+          <span><i class="dot obstacle-dot"></i> Obstáculo</span>
+          <span><i class="dot cleaned-dot"></i> Cobertura</span>
+        </div>
+      </div>
+
+      <div class="canvas-wrap" id="sceneWrap">
+        <div id="simCanvas" role="img" aria-label="Maqueta tridimensional de un robot de desinfección recorriendo una habitación hospitalaria"></div>
+        <div class="scene-label"><span class="live-indicator"></span> VISTA EN TIEMPO REAL</div>
+        <div class="scene-compass" aria-hidden="true">N<br /><span>⌖</span></div>
+        <div id="sceneLoading" class="scene-loading">Preparando entorno 3D...</div>
+      </div>
+
+      <div class="controls">
+        <button id="startBtn" class="primary"><span aria-hidden="true">▶</span> Iniciar recorrido</button>
+        <button id="pauseBtn"><span aria-hidden="true">Ⅱ</span> Pausar</button>
+        <button id="resetBtn"><span aria-hidden="true">↺</span> Reiniciar</button>
+        <button id="sprayBtn"><span aria-hidden="true">◉</span> Pulverización: AUTO</button>
+        <button id="saveReportBtn"><span aria-hidden="true">▣</span> Guardar reporte</button>
+      </div>
+      <p class="concept-note">Escena y funciones representadas digitalmente. Sensores, dosificación y desempeño deberán validarse en el prototipo físico.</p>
+    </section>
+
+    <aside class="panel dashboard">
+      <div class="dashboard-heading"><div><div class="section-kicker">SEGUIMIENTO DE MISIÓN</div><h2>Panel de operación</h2></div><span class="status-chip"><i class="live-indicator"></i> <span id="status">Listo</span></span></div>
+      <div class="metric-grid">
+        <div class="metric"><span>Duración</span><strong id="elapsed">00:00</strong></div>
+        <div class="metric"><span>Cobertura estimada</span><strong id="coverage">0%</strong></div>
+        <div class="metric"><span>Obstáculos detectados</span><strong id="obstacles">0</strong></div>
+        <div class="metric"><span>Dosificación simulada</span><strong id="sprayState">Inactiva</strong></div>
+        <div class="metric"><span>Distancia</span><strong id="distance">0.0 m</strong></div>
+        <div class="metric"><span>Batería</span><strong id="battery">100%</strong></div>
+        <div class="metric"><span>Tanque</span><strong id="tank">100%</strong></div>
+      </div>
+
+      <div class="progress-block">
+        <div class="progress-label"><span>Avance del área</span><span id="coverageMini">0%</span></div>
+        <div class="progress"><div id="coverageBar" class="progress-fill"></div></div>
+      </div>
+
+      <div class="mission-info"><span class="mission-icon">⌖</span><div><span>ÁREA ASIGNADA</span><strong id="assignedZone">Zona hospitalaria A</strong></div><span class="mission-arrow">↗</span></div>
+
+      <div class="sensor-block">
+        <div class="section-kicker">SENSORES SIMULADOS</div>
+        <div class="sensor-list">
+          <div><span>Ultrasónico frontal</span><b id="frontSensor">— cm</b></div>
+          <div><span>Ultrasónico izquierdo</span><b id="leftSensor">— cm</b></div>
+          <div><span>Ultrasónico derecho</span><b id="rightSensor">— cm</b></div>
+          <div><span>Temperatura</span><b id="tempSensor">— °C</b></div>
+          <div><span>Humedad</span><b id="humiditySensor">— %</b></div>
+          <div><span>VOC / aire</span><b id="vocSensor">— índice</b></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="downloadReportsBtn"><span aria-hidden="true">↓</span> Exportar reportes CSV</button>
+      </div>
+    </aside>
+
+    <section class="panel log-panel">
+      <div class="panel-header">
+        <div>
+          <div class="section-kicker">REGISTRO DIGITAL</div>
+          <h2>Trazabilidad de la misión</h2>
+          <p>Eventos registrados durante la operación simulada.</p>
+        </div>
+        <button id="clearLogBtn" class="clear-log" type="button">Limpiar eventos</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Hora</th><th>Evento</th><th>Detalle</th></tr></thead>
+          <tbody id="eventLog"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="panel reports-panel">
+      <div class="panel-header"><div><div class="section-kicker">HISTORIAL</div><h2>Reportes guardados</h2><p>Misiones persistidas en SQLite.</p></div></div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Escenario</th><th>Cobertura</th><th>Usuario</th><th>Fecha</th></tr></thead><tbody id="reportsTable"></tbody></table></div>
+    </section>
+    </section>
+
+    <section id="adminPanel" class="panel admin-panel hidden">
+      <div class="panel-header"><div><div class="section-kicker">ADMINISTRACIÓN</div><h2>Usuarios y perfiles</h2><p>Gestiona el acceso a la consola de operación.</p></div></div>
+      <form id="userForm" class="user-form">
+        <input id="newFullName" placeholder="Nombre completo" required>
+        <input id="newUsername" placeholder="Usuario" required>
+        <input id="newPassword" type="password" placeholder="Contraseña (mín. 6)" required>
+        <select id="newRole"><option value="operator">Operador</option><option value="observer">Observador</option><option value="admin">Administrador</option></select>
+        <button class="primary" type="submit">Crear usuario</button>
+      </form>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Creado</th></tr></thead><tbody id="usersTable"></tbody></table></div>
+    </section>
+
+    <section id="propuesta" class="proposal">
+      <div class="proposal-heading"><p class="eyebrow">EL PROYECTO</p><h2>Del concepto a un<br />prototipo funcional.</h2></div>
+      <p class="proposal-description">Desarrollar un robot móvil inteligente y modular que automatice procesos de limpieza y desinfección en zonas de riesgo. Integrará sensores para navegar y detectar obstáculos, un sistema controlado de aplicación de desinfectante y una plataforma digital para verificar cada tarea.</p>
+      <div class="proposal-outcomes">
+        <div><span>01 / NAVEGACIÓN</span><strong>Desplazamiento y detección de obstáculos</strong></div>
+        <div><span>02 / DESINFECCIÓN</span><strong>Aplicación controlada de desinfectante</strong></div>
+        <div><span>03 / TRAZABILIDAD</span><strong>Registro digital de cobertura y operación</strong></div>
+      </div>
+      <div class="proposal-footer"><span>OBJETIVO</span><strong>Reducir la exposición del personal y facilitar la verificación del trabajo realizado.</strong><span class="proposal-tag">PROTOTIPO PROPUESTO <b>↗</b></span></div>
+    </section>
+  </main>
+
+  <footer><span>CleanBot · Robótica para entornos más seguros</span><span>SIMULACIÓN CONCEPTUAL · NO REPRESENTA VALIDACIÓN CLÍNICA</span></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="dashboard-3d.js"></script>
+</body>
+</html>
