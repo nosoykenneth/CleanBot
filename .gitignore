@@ -1,0 +1,4 @@
+node_modules/
+**/cleanbot.db
+__pycache__/
+*.py[cod]
