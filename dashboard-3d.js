@@ -98,7 +98,9 @@ try {
         || scenario.obstacles.some(o => site.x >= o.x && site.x < o.x + o.w && site.y >= o.y && site.y < o.y + o.h)
         || ids.has(site.id) || positions.has(`${site.x},${site.y}`)) return false;
       ids.add(site.id); positions.add(`${site.x},${site.y}`); return true;
-    }).map(site => ({ id: site.id, x: site.x, y: site.y, type: site.type, signature_id: site.signature_id }));
+    }).map(site => ({ id: site.id, x: site.x, y: site.y, type: site.type, signature_id: site.signature_id,
+      appearance: ['dust', 'stain', 'liquid'].includes(site.appearance) ? site.appearance : 'stain',
+      difficulty: ['easy', 'persistent', 'stubborn'].includes(site.difficulty) ? site.difficulty : 'easy' }));
   }
 } catch { /* Keep defaults when browser storage is unavailable or invalid. */ }
 
@@ -199,6 +201,7 @@ const sampleSiteGroup = new THREE.Group();
 const coverageGroup = new THREE.Group();
 const routeGroup = new THREE.Group();
 const sampleSiteVisuals = new Map();
+const visualAudits = new Map();
 scene.add(zoneGroup, obstacleGroup, sampleSiteGroup, coverageGroup, routeGroup);
 
 function clearGeometries(group) {
@@ -272,8 +275,93 @@ function buildSampleSite(site) {
   const marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 }));
   marker.position.y = 0.12;
   group.add(marker);
+  const dirt = new THREE.Group();
+  let seed = [...site.id].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 42);
+  const random = () => { seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; };
+  const appearance = site.appearance || (site.type === 'biological' ? 'liquid' : 'stain');
+  for (let i = 0; i < 55; i++) {
+    const angle = random() * Math.PI * 2, radius = Math.sqrt(random()) * 0.48;
+    const size = appearance === 'dust' ? 0.012 + random() * 0.022 : 0.04 + random() * 0.09;
+    const material = new THREE.MeshStandardMaterial({ color: appearance === 'dust' ? '#80705a' : appearance === 'liquid' ? '#69472c' : '#674c32', transparent: true, opacity: 0.8, roughness: appearance === 'liquid' ? 0.12 : 0.95, depthWrite: false });
+    const particle = new THREE.Mesh(new THREE.CircleGeometry(size, 12), material);
+    particle.rotation.x = -Math.PI / 2;
+    particle.position.set(Math.cos(angle) * radius, 0.035 + i * 0.0001, Math.sin(angle) * radius);
+    particle.scale.y = 0.55 + random() * 0.6;
+    particle.userData.baseOpacity = material.opacity;
+    dirt.add(particle);
+  }
+  group.add(dirt);
   sampleSiteGroup.add(group);
-  sampleSiteVisuals.set(site.id, { group, patch, ring, marker });
+  sampleSiteVisuals.set(site.id, { group, patch, ring, marker, dirt });
+}
+
+function passResidual(difficulty, pass) {
+  return difficulty === 'stubborn' ? Math.max(0.35, 1 - pass * 0.3)
+    : difficulty === 'persistent' ? (pass === 1 ? 0.32 : 0.04) : 0.02;
+}
+function setDirtRemaining(site, remaining) {
+  const visual = sampleSiteVisuals.get(site.id);
+  if (!visual) return;
+  visual.dirt.children.forEach((particle, index, all) => {
+    particle.visible = index / all.length < remaining;
+    particle.material.opacity = particle.userData.baseOpacity * Math.min(1, remaining * 2);
+  });
+}
+function captureAuditScene(site) {
+  const view = new THREE.PerspectiveCamera(45, camera.aspect, 0.05, 80);
+  const center = cellCenter(site.x, site.y);
+  view.position.set(center.x + 0.25, 2.2, center.z + 1.5);
+  view.lookAt(center.x, 0, center.z);
+  const overlayVisibility = [coverageGroup.visible, routeGroup.visible, sampleMarker.visible];
+  coverageGroup.visible = routeGroup.visible = sampleMarker.visible = false;
+  try {
+    renderer.render(scene, view);
+    return renderer.domElement.toDataURL('image/png');
+  } catch {
+    addEvent('Captura visual no disponible', 'La auditoría conserva el resultado simulado sin imagen.');
+    return null;
+  } finally {
+    [coverageGroup.visible, routeGroup.visible, sampleMarker.visible] = overlayVisibility;
+    renderer.render(scene, camera);
+  }
+}
+function renderVisualAudit(audit) {
+  $('auditStatus').textContent = `${audit.site.id} · ${audit.result} · pasada ${audit.passes}/2`;
+  for (const [id, value] of [['auditBefore', audit.before], ['auditAfter', audit.after]]) {
+    $(id).hidden = !value;
+    if (value) $(id).src = value;
+  }
+  $('auditHistory').replaceChildren();
+  for (const entry of visualAudits.values()) {
+    const row = document.createElement('tr');
+    for (const value of [entry.site.id, entry.passes, `${Math.round((1 - entry.remaining) * 100)}%`, entry.result]) {
+      const cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
+    }
+    $('auditHistory').appendChild(row);
+  }
+}
+function startVisualPass() {
+  const site = protocolState.site;
+  if (!site) return;
+  let audit = visualAudits.get(site.id);
+  if (!audit) {
+    audit = { site, passes: 0, remaining: 1, before: captureAuditScene(site), after: null };
+    visualAudits.set(site.id, audit);
+  }
+  audit.passes++;
+  audit.startRemaining = audit.remaining;
+  audit.targetRemaining = passResidual(site.difficulty || 'easy', audit.passes);
+  audit.startedAt = performance.now();
+  audit.result = 'Tratamiento localizado simulado';
+  renderVisualAudit(audit);
+}
+function animateVisualCleaning() {
+  if (protocolState.phase !== 'applying' || !protocolState.site) return;
+  const audit = visualAudits.get(protocolState.site.id);
+  if (!audit) return;
+  const progress = Math.min(1, (performance.now() - audit.startedAt) / 2100);
+  setDirtRemaining(audit.site, audit.startRemaining + (audit.targetRemaining - audit.startRemaining) * progress);
+  $('auditStatus').textContent = `${audit.site.id} · limpieza localizada ${Math.round(progress * 100)}% · pasada ${audit.passes}/2`;
 }
 
 function buildScenario() {
@@ -298,6 +386,8 @@ function buildScenario() {
 }
 
 function residueColor(site) {
+  const audit = visualAudits.get(site.id);
+  if (audit?.accepted) return '#4d9b79';
   return resolveSampleProtocol(site.type, site)?.protocol ? '#d59436' : '#c84f43';
 }
 
@@ -889,7 +979,7 @@ function renderMissionSamples() {
     const row = document.createElement('tr');
     const action = item.sampleType === 'unknown'
       ? `Retenida · ${item.sampleCode || 'laboratorio pendiente'}`
-      : item.status === 'treated' ? 'Atendida al detectar' : 'Pendiente para el regreso';
+      : item.status === 'review' ? 'Revisión humana requerida' : item.status === 'treated' ? 'Atendida al detectar' : 'Pendiente para el regreso';
     for (const value of [item.site.id, item.match?.classification || 'Señal no identificada', action]) {
       const cell = document.createElement('td');
       cell.textContent = value;
@@ -1263,7 +1353,12 @@ function finishScreening() {
 function beginApplication() {
   protocolTimer = null;
   if (protocolState.phase !== 'preparing' || protocolState.stopLatched) return;
+  if (!(cartridgeInventory[protocolState.match?.cartridge] > 0) || sim.tank <= 0 || sim.battery <= 0) {
+    isolateProtocol('No hay recursos disponibles para ejecutar la pasada.', false);
+    return;
+  }
   protocolState.phase = 'applying';
+  startVisualPass();
   protocolState.remaining = 2.1;
   cartridgeInventory[protocolState.match.cartridge] -= 1;
   sim.spraying = true;
@@ -1279,6 +1374,35 @@ function beginApplication() {
 function finishApplication() {
   protocolTimer = null;
   if (protocolState.phase !== 'applying' || protocolState.stopLatched) return;
+  const audit = protocolState.site && visualAudits.get(protocolState.site.id);
+  if (audit) {
+    audit.remaining = audit.targetRemaining;
+    setDirtRemaining(audit.site, audit.remaining);
+    const passed = audit.remaining <= 0.08;
+    audit.accepted = passed;
+    refreshResidueColors();
+    audit.after = captureAuditScene(audit.site);
+    audit.result = passed ? 'Resultado visual aceptable (simulado)' : 'Residuo persistente';
+    renderVisualAudit(audit);
+    addEvent('Auditoría visual simulada', `${audit.site.id} · reducción ${Math.round((1 - audit.remaining) * 100)}% · pasada ${audit.passes}/2`);
+    if (!passed && audit.passes < 2 && cartridgeInventory[protocolState.match.cartridge] > 0 && sim.tank > 0 && sim.battery > 0) {
+      sim.spraying = false;
+      protocolState.phase = 'preparing';
+      protocolState.remaining = 1.2;
+      audit.result = 'Segunda pasada autorizada por regla demo';
+      renderVisualAudit(audit);
+      protocolTimer = setTimeout(beginApplication, 1200);
+      return;
+    }
+    if (!passed) {
+      audit.result = 'Revisión humana requerida · límite de pasadas';
+      renderVisualAudit(audit);
+      if (protocolState.activeMissionSample) protocolState.activeMissionSample.status = 'review';
+      renderMissionSamples();
+      isolateProtocol('Persisten residuos visibles simulados. Se agotó el límite o los recursos: requiere intervención humana.', false);
+      return;
+    }
+  }
   protocolState.phase = 'complete';
   protocolState.remaining = 0;
   sim.spraying = false;
@@ -1328,6 +1452,10 @@ function finishApplication() {
 }
 
 function resetSimulation(silent = false) {
+  visualAudits.clear();
+  $('auditHistory').replaceChildren();
+  $('auditStatus').textContent = 'Esperando inspección';
+  $('auditBefore').hidden = $('auditAfter').hidden = true;
   clearTimeout(protocolTimer);
   protocolTimer = null;
   sim.position = { x: 1.5, y: 1.5 };
@@ -1521,6 +1649,7 @@ function manualStep(dt, speed) {
 }
 
 function tick(dt, elapsedDt = dt) {
+  animateVisualCleaning();
   const protocolActive = ['scanning', 'preparing', 'applying'].includes(protocolState.phase);
   if (protocolActive && !sim.running) {
     sim.elapsed += elapsedDt;
@@ -1742,6 +1871,10 @@ async function saveReport() {
       sensor_snapshot: {
         ...sim.sensors,
         protocol_phase: protocolState.phase,
+        visual_audits: [...visualAudits.values()].map(audit => ({
+          mode: 'simulation', site_id: audit.site.id, passes: audit.passes,
+          simulated_reduction_percent: Math.round((1 - audit.remaining) * 100), result: audit.result
+        })),
         sample_classification: protocolState.match?.classification || (protocolState.sample === 'unknown' ? 'Señal no identificada' : 'Sin muestra')
       },
       notes: protocolState.match ? `Demo ${protocolState.match.protocol} · ${protocolState.phase}` : 'Simulación 3D CleanBot'
@@ -2048,7 +2181,7 @@ function renderResidueEditor() {
   const list = $('residueList');
   list.replaceChildren();
   const observer = !auth.user || auth.user.role === 'observer';
-  for (const id of ['residueAction', 'residueType', 'residueSignature', 'clearResiduesBtn', 'restoreResiduesBtn']) $(id).disabled = observer;
+  for (const id of ['residueAction', 'residueType', 'residueSignature', 'residueAppearance', 'residueDifficulty', 'clearResiduesBtn', 'restoreResiduesBtn', 'auditDemoBtn']) $(id).disabled = observer;
   if (observer) $('residueAction').value = 'navigate';
   $('residueSignature').disabled = observer || $('residueType').value !== 'unknown';
   for (const site of SCENARIOS[ui.scenarioSelect.value].samples) {
@@ -2098,11 +2231,25 @@ function editResidueAtPointer(event) {
   if (type === 'unknown' && !/^[A-Za-z0-9][A-Za-z0-9._-]{1,59}$/.test(signature)) {
     toast('Escribe una firma de 2 a 60 caracteres: letras, números, punto, guion o guion bajo.'); return;
   }
-  scenario.samples.push({ id: `R-${crypto.randomUUID().slice(0, 18)}`, x, y, type, ...(type === 'unknown' ? { signature_id: signature } : {}) });
+  scenario.samples.push({ id: `R-${crypto.randomUUID().slice(0, 18)}`, x, y, type,
+    appearance: $('residueAppearance').value, difficulty: $('residueDifficulty').value,
+    ...(type === 'unknown' ? { signature_id: signature } : {}) });
   saveResidues();
   toast('Residuo colocado. Puedes colocar más o elegir Navegar para iniciar.');
 }
 $('residueType').addEventListener('change', renderResidueEditor);
+$('auditDemoBtn').addEventListener('click', () => {
+  if (!canEditResidues()) return;
+  ui.scenarioSelect.value = 'warehouse';
+  SCENARIOS.warehouse.samples = [
+    { id: `DEMO-E-${crypto.randomUUID().slice(0, 8)}`, x: 7, y: 12, type: 'organic', appearance: 'dust', difficulty: 'easy' },
+    { id: `DEMO-P-${crypto.randomUUID().slice(0, 8)}`, x: 19, y: 12, type: 'organic', appearance: 'stain', difficulty: 'persistent' },
+    { id: `DEMO-U-${crypto.randomUUID().slice(0, 8)}`, x: 34, y: 13, type: 'unknown', signature_id: 'SIM-AUDIT-UNKNOWN', appearance: 'liquid', difficulty: 'stubborn' }
+  ];
+  $('residueAction').value = 'navigate';
+  saveResidues();
+  toast('Demo preparada: polvo fácil, mancha persistente y charco desconocido. Inicia el recorrido.');
+});
 $('residueEditor').addEventListener('toggle', () => {
   if (!$('residueEditor').open) $('residueAction').value = 'navigate';
 });

@@ -78,11 +78,41 @@
           <label>Acción en el mapa<select id="residueAction"><option value="navigate">Navegar</option><option value="add">Colocar residuo</option><option value="remove">Quitar residuo</option></select></label>
           <label>Tipo<select id="residueType"><option value="organic">Orgánico conocido</option><option value="biological">Biológico conocido</option><option value="unknown">Desconocido / firma personalizada</option></select></label>
           <label>Firma del residuo<input id="residueSignature" maxlength="60" placeholder="Ej. SIM-RESIDUO-01"></label>
+          <label>Aspecto<select id="residueAppearance"><option value="stain">Mancha adherida</option><option value="dust">Polvo y partículas</option><option value="liquid">Charco</option></select></label>
+          <label>Dificultad<select id="residueDifficulty"><option value="easy">Fácil · una pasada</option><option value="persistent">Persistente · dos pasadas</option><option value="stubborn">Difícil · revisión humana</option></select></label>
           <button id="clearResiduesBtn" type="button">Quitar todos</button>
           <button id="restoreResiduesBtn" type="button">Restaurar ejemplos</button>
+          <button id="auditDemoBtn" type="button">Preparar demo de auditoría · bodega</button>
         </div>
         <p id="residueEditorHint" aria-live="polite">Elige Colocar o Quitar y haz clic en el suelo del mapa.</p>
         <div class="table-wrap"><table><thead><tr><th>Residuo / posición</th><th>Firma</th><th>Protocolo</th><th>Acciones</th></tr></thead><tbody id="residueList"></tbody></table></div>
+      </details>
+      <section class="visual-audit" aria-labelledby="auditTitle">
+        <h3 id="auditTitle">Auditoría visual · simulación</h3>
+        <p>Capturas de la escena 3D. El resultado se calcula con el estado del simulador; no hay IA ni análisis de imágenes reales.</p>
+        <strong id="auditStatus" aria-live="polite">Esperando inspección</strong>
+        <div class="audit-images"><figure><img id="auditBefore" hidden alt="Escena antes del tratamiento"><figcaption>Antes</figcaption></figure><figure><img id="auditAfter" hidden alt="Escena después del tratamiento"><figcaption>Después</figcaption></figure></div>
+        <div class="table-wrap"><table><thead><tr><th>Residuo</th><th>Pasadas</th><th>Reducción simulada</th><th>Resultado</th></tr></thead><tbody id="auditHistory"></tbody></table></div>
+      </section>
+      <details class="visual-audit photo-audit">
+        <summary>Auditar fotografías reales · comparación visual</summary>
+        <p>Fotografía el mismo piso limpio como referencia, luego antes y después de la limpieza. Mantén cámara fija y luz estable. El análisis compara píxeles con la referencia; no identifica sustancias ni activa el robot.</p>
+        <div class="photo-inputs">
+          <label>Piso limpio de referencia<input id="photoReference" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><canvas id="photoReferencePreview" width="512" height="320" aria-label="Fotografía del piso limpio"></canvas></label>
+          <label>Antes de limpiar<input id="photoBefore" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><canvas id="photoBeforePreview" width="512" height="320" aria-label="Foto anterior. Arrastra para marcar la zona a comparar"></canvas></label>
+          <label>Después de limpiar<input id="photoAfter" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"><canvas id="photoAfterPreview" width="512" height="320" aria-label="Fotografía después de limpiar"></canvas></label>
+        </div>
+        <p>Arrastra sobre «Antes» para marcar la zona de suciedad (rectángulo amarillo). Deja piso limpio alrededor para comprobar cambios del fondo. También puedes usar la zona central predeterminada.</p>
+        <div class="residue-tools">
+          <label>Sensibilidad de diferencia (umbral RGB)<input id="photoThreshold" type="number" min="5" max="100" step="1" value="35"></label>
+          <button id="photoResetRoi" type="button">Usar zona central</button>
+          <button id="photoCompare" class="primary" type="button">Comparar fotografías</button>
+          <button id="photoExport" type="button" disabled>Descargar resultado y evidencias</button>
+        </div>
+        <label class="photo-confirm"><input id="photoAligned" type="checkbox"> Confirmo que las tres fotografías corresponden al mismo piso, encuadre y condiciones de luz.</label>
+        <p id="photoResult" role="status" aria-live="polite"></p>
+        <div class="photo-masks"><figure><canvas id="photoBeforeMask" width="512" height="320" aria-label="Diferencias antes de limpiar"></canvas><figcaption>Antes: diferencias marcadas en rojo</figcaption></figure><figure><canvas id="photoAfterMask" width="512" height="320" aria-label="Diferencias después de limpiar"></canvas><figcaption>Después: diferencias marcadas en rojo</figcaption></figure></div>
+        <p>Las fotos se procesan en este navegador. La descarga incluye copias reducidas y parámetros del análisis. Una diferencia puede ser suciedad, sombra, humedad o movimiento: el resultado requiere revisión humana.</p>
       </details>
       <div class="canvas-wrap" id="sceneWrap">
         <div id="simCanvas" role="img" aria-label="Maqueta tridimensional de un robot de desinfección recorriendo una habitación hospitalaria"></div>
@@ -271,5 +301,6 @@
   <footer><span>CleanBot · Robótica para entornos más seguros</span><span>SIMULACIÓN CONCEPTUAL · NO REPRESENTA VALIDACIÓN CLÍNICA</span></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="module" src="dashboard-3d.js"></script>
+  <script type="module" src="/avanzada/photo-audit.js"></script>
 </body>
 </html>

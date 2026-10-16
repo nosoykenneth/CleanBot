@@ -55,5 +55,25 @@ Para agregar un protocolo inicia sesión como administrador (`admin` / `admin123
 
 ## Alcance
 
+### Comparación de fotografías reales
+
+Abre **Auditar fotografías reales · comparación visual**. Carga tres fotos JPG, PNG o WebP: el piso limpio de referencia, el piso antes de limpiar y el piso después. Las fotos deben mantener el mismo encuadre, proporción y luz; esta versión no alinea automáticamente imágenes ni corrige perspectiva. Marca la región de suciedad arrastrando sobre la foto anterior (o usa la región central). Deja al menos 10% del encuadre fuera de esa región, con suelo sin cambios, para controlar variaciones del fondo. Confirma las condiciones y pulsa **Comparar fotografías**.
+
+El módulo compara distancias RGB de cada píxel contra la referencia limpia y muestra máscaras en rojo. La reducción es `(área diferente antes − área diferente después) / área diferente antes`; puede ser negativa si aumenta el área distinta. No mide composición, intensidad física, suciedad invisible ni desinfección, y no controla tratamientos. El operador revisa el resultado. Se rechazan imágenes transparentes, una diferencia inicial insuficiente o cambios excesivos fuera de la región. Esto es una comprobación básica, no una garantía de alineación: sombras o reflejos dentro de la región pueden causar errores sin activar el rechazo.
+
+El umbral se puede ajustar entre 5 y 100; ese ajuste cambia el resultado y se incluye en la descarga. Se procesan imágenes de hasta 12 MB y 40 megapíxeles, reducidas a 512 píxeles en el lado mayor. El análisis se ejecuta localmente en el navegador, sin enviar las fotos al servidor. **Descargar resultado y evidencias** exporta JSON con parámetros, motivos de rechazo y copias reducidas de las tres fotografías. No se guarda automáticamente en SQLite ni se conserva tras recargar la página. El análisis de fotos y la auditoría del simulador se mantienen separados.
+
+Pruebas: `node --test tests/photo-analysis.test.mjs tests/visual-audit.test.cjs`. Comprobación opcional con Edge en Windows: `node tests/photo-browser-smoke.cjs` (Node 22+, inicia un servidor local temporal y un perfil aislado de Edge).
+
+### Auditoría visual simulada
+
+En **Configurar residuos del escenario**, pulsa **Preparar demo de auditoría · bodega** y luego inicia el recorrido. La configuración del escenario de bodega se sustituye por polvo fácil, una mancha persistente y un charco desconocido; **Restaurar ejemplos** recupera los puntos originales. También puedes colocar residuos eligiendo aspecto y dificultad.
+
+Los tratamientos conocidos reducen gradualmente las partículas visibles y generan capturas de la escena 3D antes/después desde la misma vista. Una regla demo permite como máximo dos pasadas: una mancha fácil alcanza un residual simulado del 2%; una persistente, 32% y luego 4%; una difícil conserva 40% después de dos pasadas y exige revisión humana, sin liberar su zona. El umbral demo es 8%. Estos valores son parámetros de simulación, no mediciones de imagen ni eficacia de limpieza real. La aplicación es localizada y conceptual, no una simulación física de contacto del cepillo con el suelo.
+
+El historial de auditoría se conserva durante la misión y su resumen se incluye al guardar el reporte en SQLite. Las capturas se muestran en el navegador durante la misión; no se guardan como evidencias persistentes en el servidor. Reiniciar borra la auditoría de la misión. No hay modelo de IA, análisis de fotografías reales ni validación microbiológica. Los desconocidos mantienen la cámara automática y la autorización humana antes de una toma.
+
+Pruebas de la lógica: `node --test tests/visual-audit.test.cjs`.
+
 Es una **simulación conceptual**. La navegación, los sensores y la dosificación son datos representativos; deberán validarse con hardware y protocolos apropiados antes de una aplicación en entornos reales.
 # ExpoClean
