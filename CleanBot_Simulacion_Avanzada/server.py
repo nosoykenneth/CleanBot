@@ -80,6 +80,24 @@ def init_db() -> None:
             created_at TEXT NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
+
+        CREATE TABLE IF NOT EXISTS retained_samples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sample_code TEXT NOT NULL UNIQUE,
+            user_id INTEGER NOT NULL,
+            scenario TEXT NOT NULL CHECK(scenario IN ('hospital','industry','warehouse')),
+            site_id TEXT NOT NULL,
+            sample_type TEXT NOT NULL CHECK(sample_type = 'unknown'),
+            classification TEXT NOT NULL,
+            location_x INTEGER NOT NULL,
+            location_y INTEGER NOT NULL,
+            sample_status TEXT NOT NULL CHECK(sample_status = 'retained_for_lab_review'),
+            created_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS retained_samples_site_once
+        ON retained_samples(user_id, scenario, site_id);
         """
     )
 
@@ -280,6 +298,33 @@ class CleanBotHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
 
+        if path == "/api/samples":
+            session = self._auth()
+            if not session:
+                self._send_json({"error": "No autenticado"}, HTTPStatus.UNAUTHORIZED)
+                return
+            conn = db_connect()
+            if session["role"] == "operator":
+                rows = conn.execute(
+                    """
+                    SELECT s.*, u.username, u.full_name
+                    FROM retained_samples s JOIN users u ON u.id=s.user_id
+                    WHERE s.user_id=? ORDER BY s.id DESC LIMIT 100
+                    """,
+                    (session["id"],),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT s.*, u.username, u.full_name
+                    FROM retained_samples s JOIN users u ON u.id=s.user_id
+                    ORDER BY s.id DESC LIMIT 100
+                    """
+                ).fetchall()
+            conn.close()
+            self._send_json({"samples": [dict(row) for row in rows]})
+            return
+
         if path == "/api/users":
             session = self._auth({"admin"})
             if session == "forbidden":
@@ -374,6 +419,70 @@ class CleanBotHandler(BaseHTTPRequestHandler):
             report_id = cur.lastrowid
             conn.close()
             self._send_json({"ok": True, "report_id": report_id}, HTTPStatus.CREATED)
+            return
+
+        if path == "/api/samples":
+            session = self._auth({"admin", "operator"})
+            if session == "forbidden":
+                self._send_json({"error": "El perfil observador no puede registrar muestras"}, HTTPStatus.FORBIDDEN)
+                return
+            if not session:
+                self._send_json({"error": "No autenticado"}, HTTPStatus.UNAUTHORIZED)
+                return
+
+            scenario = str(body.get("scenario", ""))
+            site_id = str(body.get("site_id", "")).strip()[:40]
+            sample_type = str(body.get("sample_type", ""))
+            classification = str(body.get("classification", "Señal no identificada"))[:120]
+            if scenario not in {"hospital", "industry", "warehouse"} or not site_id or sample_type != "unknown":
+                self._send_json({"error": "Datos de muestra desconocida inválidos"}, HTTPStatus.BAD_REQUEST)
+                return
+            try:
+                location_x = int(body.get("location_x"))
+                location_y = int(body.get("location_y"))
+            except (TypeError, ValueError):
+                self._send_json({"error": "Ubicación de muestra inválida"}, HTTPStatus.BAD_REQUEST)
+                return
+
+            sample_code = f"CB-{datetime.now(timezone.utc):%Y%m%d%H%M%S}-{secrets.token_hex(3).upper()}"
+            conn = db_connect()
+            existing = conn.execute(
+                "SELECT * FROM retained_samples WHERE user_id=? AND scenario=? AND site_id=?",
+                (session["id"], scenario, site_id),
+            ).fetchone()
+            if existing:
+                conn.close()
+                self._send_json({"ok": True, "sample": dict(existing), "reused": True})
+                return
+            cur = conn.execute(
+                """
+                INSERT INTO retained_samples(
+                    sample_code, user_id, scenario, site_id, sample_type, classification,
+                    location_x, location_y, sample_status, created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    sample_code, session["id"], scenario, site_id, sample_type, classification,
+                    location_x, location_y, "retained_for_lab_review", utc_now(),
+                ),
+            )
+            conn.commit()
+            sample_id = cur.lastrowid
+            conn.close()
+            self._send_json({
+                "ok": True,
+                "sample": {
+                    "id": sample_id,
+                    "sample_code": sample_code,
+                    "scenario": scenario,
+                    "site_id": site_id,
+                    "classification": classification,
+                    "location_x": location_x,
+                    "location_y": location_y,
+                    "sample_status": "retained_for_lab_review",
+                    "created_at": utc_now(),
+                },
+            }, HTTPStatus.CREATED)
             return
 
         if path == "/api/users":

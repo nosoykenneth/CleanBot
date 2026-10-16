@@ -67,6 +67,7 @@
           <span><i class="dot robot-dot"></i> CleanBot</span>
           <span><i class="dot obstacle-dot"></i> Obstáculo</span>
           <span><i class="dot cleaned-dot"></i> Cobertura</span>
+          <span><i class="dot sample-dot"></i> Muestra simulada</span>
         </div>
       </div>
 
@@ -74,6 +75,14 @@
         <div id="simCanvas" role="img" aria-label="Maqueta tridimensional de un robot de desinfección recorriendo una habitación hospitalaria"></div>
         <div class="scene-label"><span class="live-indicator"></span> VISTA EN TIEMPO REAL</div>
         <div class="scene-compass" aria-hidden="true">N<br /><span>⌖</span></div>
+        <button id="cutawayBtn" class="scene-toggle" type="button" aria-pressed="false">Ver módulos internos</button>
+        <div id="cutawayLegend" class="cutaway-legend hidden" aria-label="Módulos visibles en el corte">
+          <strong>Interior del robot</strong>
+          <span>3 cartuchos sellados</span>
+          <span>Cámara de proceso cerrada</span>
+          <span>Sensor de suelo conceptual</span>
+          <span>Cápsula de muestra sellada</span>
+        </div>
         <div id="sceneLoading" class="scene-loading">Preparando entorno 3D...</div>
       </div>
 
@@ -82,6 +91,7 @@
         <button id="pauseBtn"><span aria-hidden="true">Ⅱ</span> Pausar</button>
         <button id="resetBtn"><span aria-hidden="true">↺</span> Reiniciar</button>
         <button id="sprayBtn"><span aria-hidden="true">◉</span> Pulverización: AUTO</button>
+        <button id="safetyStopBtn" class="stop-button"><span aria-hidden="true">■</span> Paro seguro</button>
         <button id="saveReportBtn"><span aria-hidden="true">▣</span> Guardar reporte</button>
       </div>
       <p class="concept-note">Escena y funciones representadas digitalmente. Sensores, dosificación y desempeño deberán validarse en el prototipo físico.</p>
@@ -122,6 +132,58 @@
         <button id="downloadReportsBtn"><span aria-hidden="true">↓</span> Exportar reportes CSV</button>
       </div>
     </aside>
+
+    <section class="panel protocol-panel">
+      <div class="panel-header">
+        <div><div class="section-kicker">DETECCIÓN Y RESPUESTA CONTROLADA</div><h2>Protocolo de muestra</h2><p>Demostración conceptual de cribado, compatibilidad e interbloqueos.</p></div>
+        <span class="protocol-demo-badge">CATÁLOGO DE DEMOSTRACIÓN</span>
+      </div>
+      <div class="protocol-layout">
+        <div class="protocol-controls">
+          <label for="sampleSelect">Tipo de muestra para prueba manual
+            <select id="sampleSelect">
+              <option value="organic">Residuo orgánico · simulación</option>
+              <option value="biological">Indicador biológico · simulación</option>
+              <option value="unknown">Señal no identificada · simulación</option>
+            </select>
+          </label>
+          <button id="analyzeBtn" class="primary" type="button"><span aria-hidden="true">⌕</span> Simular análisis</button>
+          <button id="confirmProtocolBtn" type="button" disabled><span aria-hidden="true">✓</span> Confirmar protocolo</button>
+          <div class="analysis-result" aria-live="polite">
+            <div><span>Lectura</span><strong id="sampleResult">Sin muestra analizada</strong></div>
+            <div><span>Protocolo</span><strong id="protocolCode">Sin asignar</strong></div>
+            <div><span>Producto de catálogo</span><strong id="productResult">Sin asignar</strong></div>
+            <div><span>Perfil de dosificación</span><strong id="doseProfile">Sin asignar</strong></div>
+            <div><span>Código de muestra</span><strong id="sampleRecordCode">Sin muestra retenida</strong></div>
+            <div><span>Enclavamientos</span><strong id="interlockState">En espera</strong></div>
+            <p id="safetyMessage">La simulación no identifica compuestos reales ni autoriza el uso de productos químicos.</p>
+          </div>
+          <button id="safetyStopBtnPanel" class="text-stop" type="button">Activar paro seguro</button>
+        </div>
+        <div class="protocol-visual">
+          <ol class="process-flow" aria-label="Etapas del protocolo">
+            <li data-stage="scan"><span>01</span><strong>Cribado</strong><small>Sensor conceptual</small></li>
+            <li data-stage="classify"><span>02</span><strong>Clasificación</strong><small>Clase indicativa</small></li>
+            <li data-stage="validate"><span>03</span><strong>Compatibilidad</strong><small>Lista aprobada</small></li>
+            <li data-stage="prepare"><span>04</span><strong>Cámara cerrada</strong><small>Preparación demo</small></li>
+            <li data-stage="apply"><span>05</span><strong>Aplicación</strong><small>Zona delimitada</small></li>
+          </ol>
+          <div class="cartridge-heading"><strong>Muestras de esta misión</strong><span>El robot conserva el área pendiente y continúa la cobertura</span></div>
+          <div class="table-wrap mission-samples-wrap"><table><thead><tr><th>Punto</th><th>Clasificación</th><th>Acción</th></tr></thead><tbody id="missionSamples"></tbody></table></div>
+          <div class="cartridge-heading"><strong>Cartuchos sellados</strong><span>Productos autorizados por instalación · lotes simulados</span></div>
+          <div class="cartridge-list">
+            <div class="cartridge-row" data-cartridge="A"><i></i><span><strong>P-01</strong><small>Protocolo orgánico demo</small></span><b id="cartridgeA">12 / 12</b><em>Disponible</em></div>
+            <div class="cartridge-row" data-cartridge="B"><i></i><span><strong>P-02</strong><small>Protocolo biológico demo</small></span><b id="cartridgeB">12 / 12</b><em>Disponible</em></div>
+            <div class="cartridge-row" data-cartridge="C"><i></i><span><strong>P-03</strong><small>Reserva aprobada demo</small></span><b id="cartridgeC">12 / 12</b><em>En reserva</em></div>
+          </div>
+          <div class="retained-samples">
+            <div class="cartridge-heading"><strong>Muestras retenidas</strong><span>Casos no identificados enviados a revisión</span></div>
+            <div class="table-wrap"><table><thead><tr><th>Código</th><th>Escenario</th><th>Punto</th><th>Estado</th><th>Fecha</th></tr></thead><tbody id="retainedSamples"></tbody></table></div>
+          </div>
+          <p class="protocol-footnote">Un sistema real requiere sensores validados, fichas de seguridad, compatibilidad documentada, límites de uso y aprobación responsable. Ante una lectura ambigua, se detiene y solicita evaluación humana; nunca formula una respuesta por cuenta propia.</p>
+        </div>
+      </div>
+    </section>
 
     <section class="panel log-panel">
       <div class="panel-header">

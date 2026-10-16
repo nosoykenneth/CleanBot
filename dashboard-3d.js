@@ -8,6 +8,13 @@ const ui = {
   scenarioSelect: $('scenarioSelect'), modeSelect: $('modeSelect'), algorithmSelect: $('algorithmSelect'), speedSelect: $('speedSelect'),
   scenarioTitle: $('scenarioTitle'), scenarioDescription: $('scenarioDescription'), assignedZone: $('assignedZone'),
   startBtn: $('startBtn'), pauseBtn: $('pauseBtn'), resetBtn: $('resetBtn'), sprayBtn: $('sprayBtn'), saveReportBtn: $('saveReportBtn'),
+  cutawayBtn: $('cutawayBtn'), cutawayLegend: $('cutawayLegend'), safetyStopBtn: $('safetyStopBtn'), safetyStopBtnPanel: $('safetyStopBtnPanel'),
+  sampleSelect: $('sampleSelect'), analyzeBtn: $('analyzeBtn'), confirmProtocolBtn: $('confirmProtocolBtn'), sampleResult: $('sampleResult'), protocolCode: $('protocolCode'),
+  productResult: $('productResult'), doseProfile: $('doseProfile'), sampleRecordCode: $('sampleRecordCode'), retainedSamples: $('retainedSamples'),
+  interlockState: $('interlockState'), safetyMessage: $('safetyMessage'), processStages: [...document.querySelectorAll('.process-flow [data-stage]')],
+  missionSamples: $('missionSamples'),
+  cartridgeValues: { A: $('cartridgeA'), B: $('cartridgeB'), C: $('cartridgeC') },
+  cartridgeRows: [...document.querySelectorAll('.cartridge-row')],
   status: $('status'), elapsed: $('elapsed'), coverage: $('coverage'), coverageMini: $('coverageMini'), coverageBar: $('coverageBar'),
   obstacles: $('obstacles'), sprayState: $('sprayState'), distance: $('distance'), battery: $('battery'), tank: $('tank'),
   frontSensor: $('frontSensor'), leftSensor: $('leftSensor'), rightSensor: $('rightSensor'), tempSensor: $('tempSensor'), humiditySensor: $('humiditySensor'), vocSensor: $('vocSensor'),
@@ -20,6 +27,7 @@ const cellSize = 20;
 const cols = 37;
 const rows = 22;
 const scale = 50;
+const SAMPLE_EXCLUSION_RADIUS = 3;
 const worldWidth = cols * cellSize / scale;
 const worldDepth = rows * cellSize / scale;
 const SCENARIOS = {
@@ -29,7 +37,8 @@ const SCENARIOS = {
       { x: 5, y: 4, w: 7, h: 4, label: 'Camilla A', type: 'bed' }, { x: 17, y: 3, w: 5, h: 5, label: 'Equipo médico', type: 'cart' },
       { x: 28, y: 5, w: 7, h: 3, label: 'Camilla B', type: 'bed' }, { x: 9, y: 14, w: 6, h: 4, label: 'Estación', type: 'cart' },
       { x: 21, y: 13, w: 5, h: 6, label: 'Gabinete', type: 'cabinet' }, { x: 30, y: 15, w: 5, h: 4, label: 'Camilla C', type: 'bed' }
-    ], zones: [{ x: 1, y: 1, w: 10, h: 2 }, { x: 27, y: 10, w: 8, h: 3 }]
+    ], zones: [{ x: 1, y: 1, w: 10, h: 2 }, { x: 27, y: 10, w: 8, h: 3 }],
+    samples: [{ id: 'H-01', x: 7, y: 1, type: 'organic' }, { id: 'H-02', x: 28, y: 10, type: 'unknown' }]
   },
   industry: {
     title: 'Industria · Planta de proceso', description: 'Maquinaria, tuberías y pasillos de seguridad simulados.', baseTemp: 27.8, baseHumidity: 55,
@@ -37,7 +46,8 @@ const SCENARIOS = {
       { x: 4, y: 3, w: 7, h: 6, label: 'Máquina 1', type: 'machine' }, { x: 15, y: 4, w: 5, h: 9, label: 'Tanque', type: 'tank' },
       { x: 24, y: 2, w: 10, h: 5, label: 'Línea de proceso', type: 'machine' }, { x: 26, y: 11, w: 7, h: 7, label: 'Máquina 2', type: 'machine' },
       { x: 4, y: 16, w: 10, h: 4, label: 'Pallets', type: 'crate' }, { x: 18, y: 17, w: 5, h: 4, label: 'Bomba', type: 'machine' }
-    ], zones: [{ x: 1, y: 1, w: 35, h: 2 }, { x: 32, y: 8, w: 4, h: 6 }]
+    ], zones: [{ x: 1, y: 1, w: 35, h: 2 }, { x: 32, y: 8, w: 4, h: 6 }],
+    samples: [{ id: 'I-01', x: 13, y: 1, type: 'biological' }, { id: 'I-02', x: 34, y: 19, type: 'unknown' }]
   },
   warehouse: {
     title: 'Bodega · Almacenamiento', description: 'Estanterías, pallets y corredores para navegación autónoma.', baseTemp: 24.5, baseHumidity: 52,
@@ -46,9 +56,27 @@ const SCENARIOS = {
       { x: 20, y: 3, w: 4, h: 8, label: 'Rack C', type: 'rack' }, { x: 28, y: 3, w: 4, h: 8, label: 'Rack D', type: 'rack' },
       { x: 6, y: 15, w: 6, h: 5, label: 'Pallets', type: 'crate' }, { x: 17, y: 14, w: 6, h: 6, label: 'Carga', type: 'crate' },
       { x: 27, y: 15, w: 7, h: 5, label: 'Pallets', type: 'crate' }
-    ], zones: [{ x: 1, y: 12, w: 35, h: 2 }]
+    ], zones: [{ x: 1, y: 12, w: 35, h: 2 }],
+    samples: [{ id: 'B-01', x: 7, y: 13, type: 'organic' }, { id: 'B-02', x: 34, y: 13, type: 'unknown' }]
   }
 };
+
+const DEMO_SAMPLES = {
+  organic: {
+    classification: 'Residuo orgánico de referencia (demo)', protocol: 'PR-DEMO-01',
+    product: 'P-01 · producto aprobado (demo)', doseProfile: 'DP-DEMO-01 · perfil de ficha; sin cantidad simulada', cartridge: 'A'
+  },
+  biological: {
+    classification: 'Indicador biológico de referencia (demo)', protocol: 'PR-DEMO-02',
+    product: 'P-02 · producto aprobado (demo)', doseProfile: 'DP-DEMO-02 · perfil de ficha; sin cantidad simulada', cartridge: 'B'
+  },
+  unknown: {
+    classification: 'Señal no identificada', protocol: null, product: null,
+    doseProfile: 'No asignado · muestra retenida', cartridge: null
+  }
+};
+
+const cartridgeInventory = { A: 12, B: 12, C: 12 };
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#d9e5dc');
@@ -71,6 +99,8 @@ controls.dampingFactor = 0.07;
 controls.minDistance = 7;
 controls.maxDistance = 22;
 controls.maxPolarAngle = Math.PI * 0.47;
+const overviewCameraPosition = camera.position.clone();
+const overviewCameraTarget = controls.target.clone();
 scene.add(new THREE.HemisphereLight('#f4fff6', '#8c9a89', 2.1));
 const keyLight = new THREE.DirectionalLight('#fff4dc', 3.4);
 keyLight.position.set(-5, 12, 7);
@@ -95,6 +125,14 @@ const materials = {
   linen: new THREE.MeshStandardMaterial({ color: '#8db7ad', roughness: 0.82 }),
   coral: new THREE.MeshStandardMaterial({ color: '#cf8068', roughness: 0.75 }),
   glass: new THREE.MeshStandardMaterial({ color: '#95c5c1', roughness: 0.22, metalness: 0.25 }),
+  casing: new THREE.MeshStandardMaterial({ color: '#344640', roughness: 0.65, metalness: 0.22 }),
+  sensor: new THREE.MeshStandardMaterial({ color: '#72c5d0', roughness: 0.24, emissive: '#10434a', emissiveIntensity: 0.5 }),
+  cartridgeA: new THREE.MeshStandardMaterial({ color: '#6eaa9c', roughness: 0.4, metalness: 0.12 }),
+  cartridgeB: new THREE.MeshStandardMaterial({ color: '#d4a75f', roughness: 0.4, metalness: 0.12 }),
+  cartridgeC: new THREE.MeshStandardMaterial({ color: '#93aab3', roughness: 0.4, metalness: 0.12 }),
+  warning: new THREE.MeshStandardMaterial({ color: '#c84f43', roughness: 0.36, emissive: '#46150f', emissiveIntensity: 0.2 }),
+  processFluid: new THREE.MeshStandardMaterial({ color: '#8fcfc1', roughness: 0.24, transparent: true, opacity: 0.72 }),
+  hose: new THREE.MeshStandardMaterial({ color: '#344f49', roughness: 0.5, metalness: 0.12 }),
   zone: new THREE.MeshBasicMaterial({ color: '#e3bb66', transparent: true, opacity: 0.2, depthWrite: false }),
   coverage: new THREE.MeshBasicMaterial({ color: '#8fbd70', transparent: true, opacity: 0.49, depthWrite: false })
 };
@@ -131,9 +169,11 @@ box(scene, materials.trim, -worldWidth / 2 + 0.012, 0.12, 0, 0.04, 0.24, worldDe
 
 const obstacleGroup = new THREE.Group();
 const zoneGroup = new THREE.Group();
+const sampleSiteGroup = new THREE.Group();
 const coverageGroup = new THREE.Group();
 const routeGroup = new THREE.Group();
-scene.add(zoneGroup, obstacleGroup, coverageGroup, routeGroup);
+const sampleSiteVisuals = new Map();
+scene.add(zoneGroup, obstacleGroup, sampleSiteGroup, coverageGroup, routeGroup);
 
 function clearGeometries(group) {
   group.traverse((object) => object.geometry?.dispose());
@@ -190,11 +230,34 @@ function buildObstacle(obstacle) {
   }
 }
 
+function buildSampleSite(site) {
+  const group = new THREE.Group();
+  const center = cellCenter(site.x, site.y);
+  group.position.set(center.x, 0, center.z);
+  const color = site.type === 'unknown' ? '#c84f43' : '#d59436';
+  const patch = new THREE.Mesh(new THREE.CircleGeometry(0.11, 24), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.65, depthWrite: false }));
+  patch.rotation.x = -Math.PI / 2;
+  patch.position.y = 0.018;
+  group.add(patch);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.014, 8, 28), new THREE.MeshBasicMaterial({ color }));
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.028;
+  group.add(ring);
+  const marker = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 }));
+  marker.position.y = 0.12;
+  group.add(marker);
+  sampleSiteGroup.add(group);
+  sampleSiteVisuals.set(site.id, { group, patch, ring, marker });
+}
+
 function buildScenario() {
   clearGeometries(obstacleGroup);
   clearGeometries(zoneGroup);
+  clearGeometries(sampleSiteGroup);
+  sampleSiteVisuals.clear();
   const scenario = SCENARIOS[ui.scenarioSelect.value];
   for (const obstacle of scenario.obstacles) buildObstacle(obstacle);
+  scenario.samples.forEach(buildSampleSite);
   for (const zone of scenario.zones) {
     const center = cellCenter(zone.x + zone.w / 2 - 0.5, zone.y + zone.h / 2 - 0.5);
     const mark = new THREE.Mesh(new THREE.PlaneGeometry(zone.w * cellSize / scale, zone.h * cellSize / scale), materials.zone);
@@ -211,43 +274,147 @@ function buildScenario() {
 function buildRobot() {
   const group = new THREE.Group();
   scene.add(group);
-  box(group, materials.dark, 0, 0.25, 0, 0.9, 0.22, 0.68);
-  box(group, materials.robot, 0, 0.42, 0, 0.84, 0.2, 0.62);
-  box(group, materials.white, 0, 0.55, 0.02, 0.42, 0.08, 0.42);
-  box(group, materials.robotLight, 0, 0.555, 0.27, 0.29, 0.055, 0.075);
-  for (const x of [-0.29, 0.29]) {
-    for (const z of [-0.31, 0.31]) {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.1, 20), materials.dark);
-      wheel.rotation.x = Math.PI / 2;
-      wheel.position.set(x, 0.18, z);
+  box(group, materials.dark, 0, 0.2, 0, 0.88, 0.16, 0.76);
+  box(group, materials.casing, 0, 0.13, 0, 0.98, 0.09, 0.82);
+
+  for (const x of [-0.39, 0.39]) {
+    for (const z of [-0.24, 0.24]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.09, 24), materials.dark);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, 0.115, z);
       wheel.castShadow = true;
       group.add(wheel);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.096, 16), materials.steel);
+      hub.rotation.z = Math.PI / 2;
+      hub.position.copy(wheel.position);
+      group.add(hub);
     }
   }
-  const tankBody = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 0.38, 18), materials.white);
-  tankBody.position.set(0, 0.78, -0.11);
-  tankBody.castShadow = true;
-  group.add(tankBody);
-  const tankCap = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.055, 16), materials.robotLight);
-  tankCap.position.set(0, 1.0, -0.11);
-  group.add(tankCap);
-  const lidar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.11, 18), materials.dark);
-  lidar.position.set(0, 0.7, 0.18);
+
+  const bumper = box(group, materials.casing, 0, 0.24, 0.39, 0.92, 0.17, 0.075);
+  bumper.position.z = 0.39;
+  box(group, materials.robotLight, 0, 0.235, 0.432, 0.26, 0.025, 0.012, false);
+  for (const x of [-0.28, 0, 0.28]) {
+    const sensor = new THREE.Mesh(new THREE.SphereGeometry(0.035, 14, 12), materials.sensor);
+    sensor.position.set(x, 0.22, 0.44);
+    group.add(sensor);
+  }
+
+  const shell = new THREE.Group();
+  group.add(shell);
+  box(shell, materials.robot, 0, 0.42, -0.015, 0.78, 0.31, 0.68);
+  box(shell, materials.casing, 0, 0.585, 0.15, 0.36, 0.035, 0.27);
+  box(shell, materials.glass, 0, 0.61, 0.15, 0.29, 0.018, 0.17, false);
+  box(shell, materials.robotLight, 0, 0.612, 0.242, 0.14, 0.012, 0.018, false);
+  for (const x of [-0.32, 0.32]) {
+    box(shell, materials.casing, x, 0.44, 0.01, 0.045, 0.18, 0.46);
+    for (const z of [-0.16, 0, 0.16]) {
+      const fastener = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 8), materials.steel);
+      fastener.position.set(x * 1.08, 0.45, z);
+      shell.add(fastener);
+    }
+  }
+
+  const stopBase = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.035, 20), materials.white);
+  stopBase.position.set(0.25, 0.61, -0.04);
+  group.add(stopBase);
+  const stopButton = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.055, 20), materials.warning);
+  stopButton.position.set(0.25, 0.652, -0.04);
+  group.add(stopButton);
+
+  const lidarBase = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.09, 24), materials.casing);
+  lidarBase.position.set(-0.2, 0.61, 0.12);
+  group.add(lidarBase);
+  const lidar = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.07, 24), materials.dark);
+  lidar.position.set(-0.2, 0.68, 0.12);
   group.add(lidar);
-  const lidarTop = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.035, 18), materials.robotLight);
-  lidarTop.position.set(0, 0.77, 0.18);
-  group.add(lidarTop);
-  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.22, 10), materials.steel);
-  nozzle.position.set(0, 0.31, -0.43);
+  const lidarRing = new THREE.Mesh(new THREE.TorusGeometry(0.078, 0.012, 8, 28), materials.sensor);
+  lidarRing.rotation.x = Math.PI / 2;
+  lidarRing.position.set(-0.2, 0.72, 0.12);
+  group.add(lidarRing);
+  const cameraHousing = box(group, materials.dark, 0, 0.54, 0.37, 0.15, 0.08, 0.06);
+  const cameraLens = new THREE.Mesh(new THREE.SphereGeometry(0.026, 14, 12), materials.sensor);
+  cameraLens.position.set(0, 0.55, 0.405);
+  group.add(cameraLens);
+  cameraHousing.castShadow = true;
+  box(group, materials.dark, 0, 0.075, 0.28, 0.2, 0.075, 0.16);
+  const floorSensor = new THREE.Mesh(new THREE.SphereGeometry(0.035, 14, 12), materials.sensor);
+  floorSensor.position.set(0, 0.035, 0.32);
+  group.add(floorSensor);
+
+  const internals = new THREE.Group();
+  group.add(internals);
+  const cartridgeColors = [materials.cartridgeA, materials.cartridgeB, materials.cartridgeC];
+  const cartridgePositions = [-0.22, 0, 0.22];
+  const flowCurves = [];
+  const flowParticles = [];
+  cartridgePositions.forEach((x, index) => {
+    box(internals, materials.casing, x, 0.65, -0.22, 0.17, 0.29, 0.22);
+    box(internals, cartridgeColors[index], x, 0.65, -0.22, 0.125, 0.24, 0.18);
+    box(internals, materials.white, x, 0.785, -0.22, 0.07, 0.035, 0.07);
+    box(internals, materials.dark, x, 0.65, -0.124, 0.075, 0.035, 0.012, false);
+    const fill = box(internals, materials.robotLight, x, 0.61, -0.115, 0.055, 0.012, 0.014, false);
+    fill.userData.cartridge = String.fromCharCode(65 + index);
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(x, 0.58, -0.12), new THREE.Vector3(x, 0.48, 0.01),
+      new THREE.Vector3(x * 0.5, 0.49, 0.11), new THREE.Vector3(0, 0.52, 0.1)
+    ]);
+    const hose = new THREE.Mesh(new THREE.TubeGeometry(curve, 18, 0.012, 8, false), materials.hose);
+    internals.add(hose);
+    flowCurves.push(curve);
+    const particle = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), materials.robotLight);
+    particle.visible = false;
+    internals.add(particle);
+    flowParticles.push(particle);
+  });
+
+  box(internals, materials.casing, 0, 0.49, 0.015, 0.31, 0.2, 0.28);
+  const chamber = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.28, 24), new THREE.MeshStandardMaterial({ color: '#a9d2c9', roughness: 0.22, transparent: true, opacity: 0.38, metalness: 0.18 }));
+  chamber.position.set(0, 0.66, 0.02);
+  internals.add(chamber);
+  const fluid = new THREE.Mesh(new THREE.CylinderGeometry(0.086, 0.086, 0.11, 20), materials.processFluid);
+  fluid.position.set(0, 0.605, 0.02);
+  internals.add(fluid);
+  const mixerRotor = new THREE.Group();
+  mixerRotor.position.set(0, 0.67, 0.02);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.2, 10), materials.steel);
+  mixerRotor.add(shaft);
+  box(mixerRotor, materials.steel, 0, 0, 0, 0.19, 0.025, 0.035);
+  box(mixerRotor, materials.steel, 0, -0.045, 0, 0.12, 0.025, 0.035).rotation.y = Math.PI / 3;
+  internals.add(mixerRotor);
+  const pump = box(internals, materials.dark, 0.25, 0.48, 0.04, 0.12, 0.12, 0.16);
+  pump.rotation.y = -0.2;
+  box(internals, materials.steel, 0.25, 0.55, 0.04, 0.075, 0.025, 0.075);
+  const sampleCapsule = new THREE.Group();
+  sampleCapsule.position.set(0.25, 0.49, 0.22);
+  const sampleTube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.17, 18, 1, true), new THREE.MeshStandardMaterial({ color: '#a8d8d2', roughness: 0.18, transparent: true, opacity: 0.5, metalness: 0.16, side: THREE.DoubleSide }));
+  sampleCapsule.add(sampleTube);
+  const sampleCore = new THREE.Mesh(new THREE.SphereGeometry(0.027, 14, 10), materials.coral);
+  sampleCore.position.y = -0.035;
+  sampleCapsule.add(sampleCore);
+  const sampleCap = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.035, 18), materials.warning);
+  sampleCap.position.y = 0.095;
+  sampleCapsule.add(sampleCap);
+  const sampleBase = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.025, 18), materials.white);
+  sampleBase.position.y = -0.095;
+  sampleCapsule.add(sampleBase);
+  sampleCapsule.visible = false;
+  internals.add(sampleCapsule);
+
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.16, 12), materials.steel);
+  nozzle.position.set(0, 0.22, -0.42);
   group.add(nozzle);
-  const sprayFan = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.65, 20, 1, true), new THREE.MeshBasicMaterial({ color: '#91d6c2', transparent: true, opacity: 0.31, side: THREE.DoubleSide, depthWrite: false }));
+  const sprayFan = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.55, 20, 1, true), new THREE.MeshBasicMaterial({ color: '#91d6c2', transparent: true, opacity: 0.31, side: THREE.DoubleSide, depthWrite: false }));
   sprayFan.rotation.x = -Math.PI / 2;
-  sprayFan.position.set(0, 0.24, -0.55);
+  sprayFan.position.set(0, 0.18, -0.58);
+  sprayFan.visible = false;
   group.add(sprayFan);
-  return { group, sprayFan };
+  internals.visible = false;
+  return { group, sprayFan, shell, internals, mixerRotor, flowCurves, flowParticles, sampleCapsule };
 }
 
-const { group: robotMesh, sprayFan } = buildRobot();
+const robotModel = buildRobot();
+const { group: robotMesh, sprayFan } = robotModel;
 const coverageGeometry = new THREE.PlaneGeometry(cellSize / scale - 0.025, cellSize / scale - 0.025);
 const auth = { token: localStorage.getItem('cleanbot_token') || '', user: null };
 const keys = new Set();
@@ -255,13 +422,57 @@ const visited = new Set();
 const detected = new Set();
 const events = [];
 const sim = {
-  position: { x: 1.5, y: 1.5 }, heading: 'E', route: [], routeIndex: 0, running: false, completed: false,
+  position: { x: 1.5, y: 1.5 }, heading: 'E', route: [], routeIndex: 0, routePurpose: 'coverage', running: false, completed: false,
   status: 'Listo', elapsed: 0, distance: 0, spraySeconds: 0, battery: 100, tank: 100, sprayMode: 'AUTO', spraying: false,
   sensors: { front: 0, left: 0, right: 0, temp: 0, humidity: 0, voc: 0 }
 };
+const protocolState = {
+  phase: 'idle', remaining: 0, sample: null, match: null, site: null, resumeAfterProtocol: false, autoSample: false, treatmentReturn: false,
+  recordedSample: null, recordPending: false, recordError: '', stopLatched: false, stopReason: ''
+};
+const handledSampleSites = new Set();
+const sampleExclusions = new Map();
+const missionSamples = [];
 const direction = { N: { x: 0, y: -1 }, E: { x: 1, y: 0 }, S: { x: 0, y: 1 }, W: { x: -1, y: 0 } };
+const sampleMarker = new THREE.Group();
+const samplePatch = new THREE.Mesh(new THREE.CircleGeometry(0.13, 28), new THREE.MeshBasicMaterial({ color: '#d58c54', transparent: true, opacity: 0.68, depthWrite: false }));
+samplePatch.rotation.x = -Math.PI / 2;
+samplePatch.position.y = 0.012;
+sampleMarker.add(samplePatch);
+const sampleRing = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.012, 8, 32), new THREE.MeshBasicMaterial({ color: '#d58c54', transparent: true, opacity: 0.9 }));
+sampleRing.rotation.x = Math.PI / 2;
+sampleRing.position.y = 0.025;
+sampleMarker.add(sampleRing);
+sampleMarker.visible = false;
+scene.add(sampleMarker);
 let lastFrame = 0;
 let lastUiUpdate = 0;
+let protocolTimer = null;
+
+function showSampleMarker() {
+  if (protocolState.site) {
+    sampleMarker.position.set(worldX(protocolState.site.x + 0.5), 0, worldZ(protocolState.site.y + 0.5));
+  } else {
+    const heading = direction[sim.heading];
+    sampleMarker.position.set(worldX(sim.position.x + heading.x * 0.55), 0, worldZ(sim.position.y + heading.y * 0.55));
+  }
+  sampleMarker.visible = true;
+  const color = protocolState.sample === 'unknown' ? '#c84f43' : '#d58c54';
+  samplePatch.material.color.set(color);
+  sampleRing.material.color.set(color);
+}
+
+function updateRobotProcess(dt) {
+  const preparing = protocolState.phase === 'preparing';
+  robotModel.sampleCapsule.visible = protocolState.sample === 'unknown' && (protocolState.phase === 'isolated' || protocolState.recordPending || Boolean(protocolState.recordedSample));
+  robotModel.mixerRotor.rotation.y += dt * (preparing ? 9 : 0.25);
+  const time = performance.now() / 1000;
+  robotModel.flowParticles.forEach((particle, index) => {
+    particle.visible = preparing;
+    if (preparing) particle.position.copy(robotModel.flowCurves[index].getPoint((time * 0.38 + index * 0.23) % 1));
+  });
+  if (sampleMarker.visible) sampleRing.scale.setScalar(1 + Math.sin(time * 3) * 0.06);
+}
 
 function toast(message) {
   ui.toast.textContent = message;
@@ -290,11 +501,13 @@ function enterApp() {
   ui.userRole.textContent = roleLabel(auth.user.role);
   ui.permissionBadge.textContent = roleLabel(auth.user.role);
   const observer = auth.user.role === 'observer';
-  [ui.startBtn, ui.pauseBtn, ui.resetBtn, ui.sprayBtn, ui.saveReportBtn].forEach((button) => { button.disabled = observer; });
+  [ui.startBtn, ui.pauseBtn, ui.resetBtn, ui.sprayBtn, ui.saveReportBtn, ui.safetyStopBtn, ui.safetyStopBtnPanel, ui.analyzeBtn, ui.confirmProtocolBtn].forEach((button) => { button.disabled = observer; });
   [ui.scenarioSelect, ui.modeSelect, ui.algorithmSelect, ui.speedSelect].forEach((select) => { select.disabled = observer; });
+  ui.sampleSelect.disabled = observer;
   ui.adminPanel.classList.toggle('hidden', auth.user.role !== 'admin');
   resetSimulation(true);
   loadReports();
+  loadRetainedSamples();
   if (auth.user.role === 'admin') loadUsers();
 }
 
@@ -336,7 +549,20 @@ ui.logoutBtn.addEventListener('click', async () => {
 
 function blocked(x, y) {
   if (x < 0 || y < 0 || x >= cols || y >= rows) return true;
-  return SCENARIOS[ui.scenarioSelect.value].obstacles.some((obstacle) => x >= obstacle.x && x < obstacle.x + obstacle.w && y >= obstacle.y && y < obstacle.y + obstacle.h);
+   return blockedByObstacle(x, y) || isExcludedSampleCell(x, y);
+}
+
+function blockedByObstacle(x, y) {
+   return SCENARIOS[ui.scenarioSelect.value].obstacles.some((item) => x >= item.x && x < item.x + item.w && y >= item.y && y < item.y + item.h);
+}
+
+function isExcludedSampleCell(x, y) {
+   return [...sampleExclusions.entries()].some(([siteId, zone]) => {
+     const activeTreatment = protocolState.phase === 'applying'
+       && protocolState.treatmentReturn
+       && protocolState.activeMissionSample?.site.id === siteId;
+     return !activeTreatment && Math.abs(x - zone.x) + Math.abs(y - zone.y) <= zone.radius;
+   });
 }
 
 function cellKey(x, y) { return `${x},${y}`; }
@@ -423,6 +649,25 @@ function clearCoverage() {
   visited.clear();
 }
 
+function markSampleAreaTreated(item) {
+  const zone = sampleExclusions.get(item.site.id);
+  if (!zone) return;
+  for (let y = Math.max(0, zone.y - zone.radius); y <= Math.min(rows - 1, zone.y + zone.radius); y++) {
+    for (let x = Math.max(0, zone.x - zone.radius); x <= Math.min(cols - 1, zone.x + zone.radius); x++) {
+      if (Math.abs(x - zone.x) + Math.abs(y - zone.y) > zone.radius || blockedByObstacle(x, y)) continue;
+      const key = cellKey(x, y);
+      if (visited.has(key)) continue;
+      visited.add(key);
+      const center = cellCenter(x, y);
+      const tile = new THREE.Mesh(coverageGeometry, materials.coverage);
+      tile.rotation.x = -Math.PI / 2;
+      tile.position.set(center.x, 0.012, center.z);
+      tile.renderOrder = 1;
+      coverageGroup.add(tile);
+    }
+  }
+}
+
 function markCoverage() {
   if (!sim.spraying || sim.tank <= 0) return;
   const cell = positionCell();
@@ -432,7 +677,7 @@ function markCoverage() {
       const x = cell.x + ox;
       const y = cell.y + oy;
       const key = cellKey(x, y);
-      if (blocked(x, y) || visited.has(key)) continue;
+      if (blockedByObstacle(x, y) || isExcludedSampleCell(x, y) || visited.has(key)) continue;
       visited.add(key);
       const center = cellCenter(x, y);
       const tile = new THREE.Mesh(coverageGeometry, materials.coverage);
@@ -464,11 +709,457 @@ function addEvent(event, detail) {
   ui.eventLog.prepend(row);
 }
 
+function renderMissionSamples() {
+  ui.missionSamples.replaceChildren();
+  if (!missionSamples.length) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 3;
+    cell.textContent = 'Sin muestras pendientes.';
+    row.appendChild(cell);
+    ui.missionSamples.appendChild(row);
+    return;
+  }
+  for (const item of missionSamples) {
+    const row = document.createElement('tr');
+    const action = item.sampleType === 'unknown'
+      ? `Retenida · ${item.sampleCode || 'laboratorio pendiente'}`
+      : item.status === 'treated' ? 'Atendida al final' : 'Pendiente para el regreso';
+    for (const value of [item.site.id, item.match?.classification || 'Señal no identificada', action]) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      row.appendChild(cell);
+    }
+    ui.missionSamples.appendChild(row);
+  }
+}
+
+function updateProtocolUI() {
+  const stageStatus = {
+    scanning: { complete: [], active: 0 },
+    pending: { complete: [0, 1], active: 2 },
+    preparing: { complete: [0, 1, 2], active: 3 },
+    applying: { complete: [0, 1, 2, 3], active: 4 },
+    complete: { complete: [0, 1, 2, 3, 4], active: -1 },
+    queuedKnown: { complete: [0, 1, 2], active: -1 },
+    queuedUnknown: { complete: [0], active: 1 },
+    returnReady: { complete: [0, 1, 2], active: 3 },
+    returning: { complete: [0, 1, 2], active: 3 },
+    pendingTreatment: { complete: [0, 1, 2], active: 4 },
+    unknownComplete: { complete: [0, 1], active: -1 },
+    isolated: { complete: [], active: -1 }
+  }[protocolState.phase] || { complete: [], active: -1 };
+
+  ui.processStages.forEach((stage, index) => {
+    stage.classList.toggle('done', stageStatus.complete.includes(index));
+    stage.classList.toggle('active', stageStatus.active === index);
+    stage.classList.toggle('blocked', protocolState.phase === 'isolated' && index >= 2);
+  });
+
+  const siteLabel = protocolState.site ? `${protocolState.site.id} · (${protocolState.site.x}, ${protocolState.site.y})` : 'Prueba manual';
+  const sampleCode = protocolState.recordedSample?.sample_code || (protocolState.recordPending ? 'Guardando custodia...' : protocolState.recordError ? 'No guardada · revisar conexión' : protocolState.sample === 'unknown' && protocolState.phase === 'isolated' ? 'Pendiente de registro' : siteLabel);
+  const match = protocolState.match || DEMO_SAMPLES[protocolState.sample];
+  const copy = {
+    idle: ['Sin muestra analizada', 'Sin asignar', 'Sin asignar', 'Sin asignar', 'Sin muestra retenida', 'En espera', 'Lecturas y productos son de demostración; no se identifican sustancias reales.'],
+    scanning: ['Analizando referencia...', 'Buscando coincidencia', 'Verificando catálogo', 'Consultando perfil aprobado', sampleCode, 'Lectura en curso', 'Cribado conceptual. No equivale a identificación química real.'],
+    pending: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', sampleCode, 'Pendiente de confirmación', 'Coincidencia de catálogo demo. La dosificación real debe provenir de la ficha aprobada del producto exacto.'],
+    preparing: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', sampleCode, 'Cámara cerrada · enclavada', 'Preparación visual. La demo no calcula cantidades ni muestra una receta.'],
+    applying: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', sampleCode, 'Aplicación localizada demo', 'Aplicación visual en zona marcada; no representa una recomendación de uso real.'],
+    complete: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', sampleCode, 'Ciclo demo completado', 'Cartucho descontado solo del inventario de esta simulación.'],
+    queuedKnown: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', siteLabel, 'Muestra sellada · ruta continúa', 'Zona excluida de cobertura. El producto se aplicará solo al finalizar el recorrido y tras confirmación.'],
+    queuedUnknown: ['Señal no identificada', 'Sin protocolo autorizado', 'Ninguno · sin aplicación', 'No asignado · requiere laboratorio', sampleCode, 'Muestra retenida · ruta continúa', 'Se conserva la zona excluida y el robot termina el resto de la misión sin intentar combatir esta señal.'],
+    returnReady: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', siteLabel, 'Cobertura completa · regreso pendiente', 'La misión principal terminó. Confirma para volver al punto y aplicar el perfil aprobado.'],
+    returning: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', siteLabel, 'Regreso al punto pendiente', 'La ruta principal terminó; el robot vuelve ahora a la muestra conocida.'],
+    pendingTreatment: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', siteLabel, 'Punto alcanzado · confirmar tratamiento', 'Confirma para simular la aplicación localizada con el perfil del catálogo.'],
+    unknownComplete: ['Muestra no identificada retenida', 'Sin protocolo autorizado', 'Ninguno · sin aplicación', 'No asignado · requiere laboratorio', sampleCode, 'Misión terminada · revisión requerida', 'La zona queda excluida y no hay regreso automático. Requiere análisis y decisión humana antes de otra tarea.'],
+    isolated: [
+      protocolState.sample === 'unknown' ? 'Señal no identificada' : match?.classification || 'Paro seguro activado',
+      match?.protocol || 'Sin protocolo autorizado', match?.product || 'Ninguno · sin aplicación',
+      match?.doseProfile || 'No asignado · sin dosificación', sampleCode, 'BLOQUEADO · PARO SEGURO',
+      `${protocolState.stopReason} La ruta y la salida están inhibidas; no se prepara ni aplica producto. ${protocolState.recordError || ''}`
+    ]
+  }[protocolState.phase];
+
+  ui.sampleResult.textContent = copy[0];
+  ui.protocolCode.textContent = copy[1];
+  ui.productResult.textContent = copy[2];
+  ui.doseProfile.textContent = copy[3];
+  ui.sampleRecordCode.textContent = copy[4];
+  ui.interlockState.textContent = copy[5];
+  ui.safetyMessage.textContent = copy[6];
+  ui.confirmProtocolBtn.disabled = !['pending', 'returnReady', 'pendingTreatment'].includes(protocolState.phase) || protocolState.stopLatched || auth.user?.role === 'observer';
+  ui.confirmProtocolBtn.innerHTML = protocolState.phase === 'returnReady'
+    ? '<span aria-hidden="true">↩</span> Regresar a muestras conocidas'
+    : protocolState.phase === 'pendingTreatment'
+      ? '<span aria-hidden="true">✓</span> Confirmar tratamiento aprobado'
+      : '<span aria-hidden="true">✓</span> Confirmar protocolo';
+  ui.analyzeBtn.disabled = ['scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase) || protocolState.stopLatched || auth.user?.role === 'observer';
+  ui.sampleSelect.disabled = ['scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase) || auth.user?.role === 'observer';
+  renderMissionSamples();
+  ui.cartridgeRows.forEach((row) => {
+    const id = row.dataset.cartridge;
+    const available = cartridgeInventory[id];
+    const selected = protocolState.match?.cartridge === id;
+    row.classList.toggle('selected', selected);
+    row.classList.toggle('empty', available <= 0);
+    ui.cartridgeValues[id].textContent = `${available} / 12`;
+    row.querySelector('em').textContent = available <= 0 ? 'Agotado' : selected ? 'Seleccionado' : id === 'C' ? 'En reserva' : 'Disponible';
+  });
+  ui.cutawayBtn.textContent = robotModel.internals.visible ? 'Ocultar módulos internos' : 'Ver módulos internos';
+  ui.cutawayBtn.setAttribute('aria-pressed', String(robotModel.internals.visible));
+  ui.cutawayLegend.classList.toggle('hidden', !robotModel.internals.visible);
+}
+
+function startSampleScreening(sampleType, site = null, resumeMission = false) {
+  if (!auth.user || auth.user.role === 'observer') return;
+  if (protocolState.stopLatched) {
+    toast('Paro seguro activo. Reinicia y verifica el área antes de otra prueba.');
+    return;
+  }
+  protocolState.autoSample = Boolean(site && resumeMission);
+  sim.running = false;
+  sim.spraying = false;
+  if (!protocolState.autoSample) sim.sprayMode = 'OFF';
+  protocolState.sample = sampleType;
+  protocolState.match = null;
+  protocolState.site = site;
+  protocolState.resumeAfterProtocol = resumeMission;
+  protocolState.recordedSample = null;
+  protocolState.recordPending = false;
+  protocolState.recordError = '';
+  protocolState.phase = 'scanning';
+  protocolState.remaining = 1.35;
+  protocolState.stopReason = '';
+  showSampleMarker();
+  sim.status = 'Analizando muestra';
+  addEvent(site ? 'Muestra detectada en recorrido' : 'Cribado manual simulado', `${site?.id || 'Prueba manual'} · lectura conceptual; no es identificación química real.`);
+  updateProtocolUI();
+  updateUI();
+  clearTimeout(protocolTimer);
+  protocolTimer = setTimeout(finishScreening, 1350);
+}
+
+function analyzeSample() {
+  startSampleScreening(ui.sampleSelect.value);
+}
+
+function detectSampleAt(x, y) {
+  const site = SCENARIOS[ui.scenarioSelect.value].samples.find((sample) =>
+    !handledSampleSites.has(sample.id)
+    && Math.abs(sample.x - x) + Math.abs(sample.y - y) <= SAMPLE_EXCLUSION_RADIUS + 1
+  );
+  if (!site) return false;
+  handledSampleSites.add(site.id);
+  sampleExclusions.set(site.id, { x: site.x, y: site.y, radius: SAMPLE_EXCLUSION_RADIUS });
+  const visual = sampleSiteVisuals.get(site.id);
+  if (visual) {
+    const color = site.type === 'unknown' ? '#c84f43' : '#4d9b79';
+    visual.patch.material.color.set(color);
+    visual.ring.material.color.set(color);
+    visual.marker.material.color.set(color);
+    visual.marker.material.emissive.set(color);
+  }
+  startSampleScreening(site.type, site, ui.modeSelect.value === 'auto');
+  return true;
+}
+
+function resumeCoverageAfterSample() {
+  if (!protocolState.autoSample || protocolState.stopLatched) return;
+  sim.route = buildCoverageRoute();
+  sim.routePurpose = 'coverage';
+  sim.routeIndex = sim.route.length > 1 ? 1 : 0;
+  drawRoute();
+  sim.completed = false;
+  sim.running = sim.route.length > 1;
+  sim.status = sim.running ? 'En operación' : 'Cobertura terminada';
+  protocolState.autoSample = false;
+  if (sim.running) addEvent('Cobertura reanudada', 'Área de muestra excluida; continúa por el resto del escenario.');
+  else isolateProtocol('No hay ruta de cobertura válida alrededor de la zona de muestra; la cobertura no se declara completa.');
+  updateUI();
+}
+
+function completeCoverageMission() {
+  sim.running = false;
+  sim.completed = true;
+  sim.sprayMode = 'OFF';
+  const pendingKnown = missionSamples.find((item) => item.sampleType !== 'unknown' && item.status === 'pending');
+  if (pendingKnown) {
+    protocolState.activeMissionSample = pendingKnown;
+    protocolState.site = pendingKnown.site;
+    protocolState.sample = pendingKnown.sampleType;
+    protocolState.match = pendingKnown.match;
+    protocolState.phase = 'returnReady';
+    protocolState.stopLatched = false;
+    sim.completed = false;
+    sim.status = 'Cobertura completa · regreso pendiente';
+    addEvent('Cobertura completa', `${missionSamples.filter((item) => item.status === 'pending').length} muestra(s) conocidas esperan confirmación de regreso.`);
+    updateUI();
+    return;
+  }
+
+  const unknownSamples = missionSamples.filter((item) => item.sampleType === 'unknown');
+  if (unknownSamples.length) {
+    const lastUnknown = unknownSamples.at(-1);
+    protocolState.activeMissionSample = null;
+    protocolState.site = lastUnknown.site;
+    protocolState.sample = 'unknown';
+    protocolState.match = DEMO_SAMPLES.unknown;
+    protocolState.phase = 'unknownComplete';
+    protocolState.stopLatched = true;
+    protocolState.stopReason = 'Cobertura finalizada; las muestras desconocidas requieren revisión de laboratorio.';
+    sim.status = 'Misión finalizada · revisión requerida';
+    sim.sprayMode = 'OFF';
+    sim.spraying = false;
+    addEvent('Misión finalizada con muestras retenidas', `${unknownSamples.length} muestra(s) pendientes de laboratorio; no se regresa a esas zonas.`);
+    updateUI();
+    return;
+  }
+
+  protocolState.phase = 'complete';
+  sim.status = 'Completado';
+  addEvent('Misión finalizada', `Cobertura alcanzada: ${coveragePercent()}%.`);
+  updateUI();
+}
+
+function startReturnToMissionSample() {
+  const item = protocolState.activeMissionSample;
+  if (!item || item.sampleType === 'unknown' || item.status !== 'pending') {
+    completeCoverageMission();
+    return;
+  }
+  const candidates = [];
+  for (let y = Math.max(0, item.site.y - 5); y <= Math.min(rows - 1, item.site.y + 5); y++) {
+    for (let x = Math.max(0, item.site.x - 5); x <= Math.min(cols - 1, item.site.x + 5); x++) {
+      if (Math.abs(x - item.site.x) + Math.abs(y - item.site.y) !== 4 || blocked(x, y)) continue;
+      const path = findPath(positionCell(), { x, y });
+      if (path.length) candidates.push(path);
+    }
+  }
+  candidates.sort((left, right) => left.length - right.length);
+  if (!candidates.length) {
+    isolateProtocol('No se encontró acceso seguro a la muestra; área sigue excluida y requiere intervención humana.');
+    return;
+  }
+  protocolState.phase = 'returning';
+  protocolState.treatmentReturn = false;
+  sim.sprayMode = 'OFF';
+  sim.route = candidates[0];
+  sim.routePurpose = 'sample-return';
+  sim.routeIndex = sim.route.length > 1 ? 1 : sim.route.length;
+  sim.completed = false;
+  sim.running = sim.routeIndex < sim.route.length;
+  sim.status = 'Regresando a muestra aprobada';
+  drawRoute();
+  addEvent('Regreso a muestra aprobado', `${item.site.id} · área aislada; recorrido sin pulverización.`);
+  if (!sim.running) {
+    protocolState.phase = 'pendingTreatment';
+    sim.status = 'Punto de muestra · confirmar tratamiento';
+  }
+  updateUI();
+}
+
+function queueMissionSample(match) {
+  if (!protocolState.site || missionSamples.some((item) => item.site.id === protocolState.site.id)) return;
+  const item = {
+    site: protocolState.site,
+    sampleType: protocolState.sample,
+    match,
+    status: protocolState.sample === 'unknown' ? 'lab' : 'pending',
+    sampleCode: null
+  };
+  missionSamples.push(item);
+  renderMissionSamples();
+  return item;
+}
+
+function isolateProtocol(reason, recordUnknown = true) {
+  clearTimeout(protocolTimer);
+  protocolTimer = null;
+  sim.running = false;
+  sim.spraying = false;
+  sim.sprayMode = 'OFF';
+  sim.status = 'Aislamiento';
+  protocolState.stopLatched = true;
+  protocolState.phase = 'isolated';
+  protocolState.remaining = 0;
+  protocolState.stopReason = reason;
+  keys.clear();
+  addEvent('Interbloqueo de seguridad', reason);
+  updateProtocolUI();
+  updateUI();
+  if (recordUnknown && protocolState.sample === 'unknown' && !protocolState.recordedSample && !protocolState.recordPending) {
+    protocolState.recordPending = true;
+    updateProtocolUI();
+    retainUnknownSample();
+  }
+}
+
+function confirmProtocol() {
+  if (protocolState.stopLatched || auth.user?.role === 'observer') return;
+  if (protocolState.phase === 'returnReady') {
+    startReturnToMissionSample();
+    return;
+  }
+  if (protocolState.phase === 'pendingTreatment') {
+    protocolState.treatmentReturn = true;
+    protocolState.phase = 'preparing';
+    protocolState.remaining = 2.8;
+    sim.status = 'Preparación cerrada demo';
+    addEvent('Tratamiento final confirmado', `${protocolState.match.protocol} · ${protocolState.activeMissionSample.site.id} · aplicación localizada después de la cobertura.`);
+    updateUI();
+    clearTimeout(protocolTimer);
+    protocolTimer = setTimeout(beginApplication, 2800);
+    return;
+  }
+  if (protocolState.phase !== 'pending') return;
+  const available = cartridgeInventory[protocolState.match.cartridge];
+  if (available <= 0) {
+    isolateProtocol('Cartucho demo agotado: movimiento de proceso y dosificación bloqueados.');
+    return;
+  }
+  sim.running = false;
+  sim.spraying = false;
+  protocolState.phase = 'preparing';
+  protocolState.remaining = 2.8;
+  sim.status = 'Preparación cerrada demo';
+  addEvent('Protocolo confirmado', `${protocolState.match.protocol} · confirmación de operador · cámara cerrada.`);
+  updateProtocolUI();
+  updateUI();
+  clearTimeout(protocolTimer);
+  protocolTimer = setTimeout(beginApplication, 2800);
+}
+
+function emergencyStop(reason = 'Paro seguro activado por el operador; salidas simuladas inhibidas.') {
+  if (!auth.user || auth.user.role === 'observer' || protocolState.stopLatched) return;
+  isolateProtocol(reason);
+  toast('Paro seguro enclavado. Reinicia la misión tras verificar el área.');
+}
+
+function finishScreening() {
+  protocolTimer = null;
+  if (protocolState.phase !== 'scanning' || protocolState.stopLatched) return;
+  const match = DEMO_SAMPLES[protocolState.sample];
+  if (protocolState.autoSample) {
+    protocolState.match = match || DEMO_SAMPLES.unknown;
+    const item = queueMissionSample(protocolState.match);
+    if (!match?.protocol) {
+      protocolState.phase = 'queuedUnknown';
+      protocolState.recordPending = true;
+      sim.status = 'Guardando muestra · área excluida';
+      addEvent('Zona excluida', `${protocolState.site.id} · sin aplicación durante esta misión.`);
+      updateUI();
+      retainUnknownSample(item).then((sample) => {
+        if (!sample) {
+          isolateProtocol('No se pudo confirmar la custodia; el robot queda detenido en seguro.', false);
+          return;
+        }
+        item.sampleCode = sample.sample_code;
+        renderMissionSamples();
+        protocolState.recordedSample = sample;
+        protocolState.recordPending = false;
+        sim.status = 'Muestra retenida · cobertura continúa';
+        addEvent('Cobertura reanudada', 'Muestra guardada para laboratorio; la zona permanece excluida.');
+        resumeCoverageAfterSample();
+      });
+      return;
+    }
+    protocolState.activeMissionSample = item;
+    protocolState.phase = 'queuedKnown';
+    sim.status = 'Muestra sellada · cobertura continúa';
+    addEvent('Zona excluida', `${protocolState.site.id} · ${match.product} reservado para después de la cobertura.`);
+    addEvent('Protocolo aprobado en cola', `${match.protocol} · retorno al punto al completar la cobertura.`);
+    updateUI();
+    resumeCoverageAfterSample();
+    return;
+  }
+  if (!match?.protocol) {
+    protocolState.match = match || DEMO_SAMPLES.unknown;
+    isolateProtocol('Señal no identificada: ruta detenida, cámara cerrada y salida de aplicación bloqueada.');
+    return;
+  }
+  if (cartridgeInventory[match.cartridge] <= 0) {
+    protocolState.match = match;
+    isolateProtocol('No hay cartucho demo compatible disponible; se requiere intervención humana.');
+    return;
+  }
+  protocolState.match = match;
+  protocolState.phase = 'pending';
+  protocolState.remaining = 0;
+  sim.status = 'Protocolo pendiente';
+  addEvent('Coincidencia de catálogo demo', `${match.protocol} · requiere confirmación del operador.`);
+  updateProtocolUI();
+  updateUI();
+}
+
+function beginApplication() {
+  protocolTimer = null;
+  if (protocolState.phase !== 'preparing' || protocolState.stopLatched) return;
+  protocolState.phase = 'applying';
+  protocolState.remaining = 2.1;
+  cartridgeInventory[protocolState.match.cartridge] -= 1;
+  sim.spraying = true;
+  sim.status = 'Aplicación localizada demo';
+  addEvent('Cámara cerrada', protocolState.treatmentReturn
+    ? `Secuencia demo completada en ${protocolState.activeMissionSample.site.id}; inicia aplicación localizada.`
+    : 'Secuencia conceptual completada; inicia aplicación visual delimitada.');
+  updateProtocolUI();
+  updateUI();
+  protocolTimer = setTimeout(finishApplication, 2100);
+}
+
+function finishApplication() {
+  protocolTimer = null;
+  if (protocolState.phase !== 'applying' || protocolState.stopLatched) return;
+  protocolState.phase = 'complete';
+  protocolState.remaining = 0;
+  sim.spraying = false;
+  addEvent('Aplicación demo finalizada', 'No representa descontaminación verificada ni validación de producto.');
+  if (protocolState.treatmentReturn) {
+    const item = protocolState.activeMissionSample;
+    if (item) {
+      item.status = 'treated';
+      markSampleAreaTreated(item);
+      sampleExclusions.delete(item.site.id);
+      addEvent('Zona atendida al cierre', `${item.site.id} · el área deja de estar excluida de la siguiente misión.`);
+    }
+    protocolState.treatmentReturn = false;
+    sim.sprayMode = 'OFF';
+    sim.running = false;
+    const nextKnown = missionSamples.find((sample) => sample.sampleType !== 'unknown' && sample.status === 'pending');
+    if (nextKnown) {
+      protocolState.activeMissionSample = nextKnown;
+      protocolState.site = nextKnown.site;
+      protocolState.sample = nextKnown.sampleType;
+      protocolState.match = nextKnown.match;
+      protocolState.phase = 'returnReady';
+      sim.status = 'Siguiente muestra aprobada · confirmar regreso';
+    } else {
+      completeCoverageMission();
+      return;
+    }
+    updateUI();
+    return;
+  }
+  sim.status = 'Protocolo demo completado';
+  const resumeMission = protocolState.resumeAfterProtocol;
+  protocolState.resumeAfterProtocol = false;
+  if (resumeMission) {
+    sim.running = true;
+    sim.status = 'En operación';
+    addEvent('Ruta reanudada', 'Muestra atendida según el protocolo demo; continúa el recorrido de cobertura.');
+  }
+  updateProtocolUI();
+  updateUI();
+}
+
 function resetSimulation(silent = false) {
+  clearTimeout(protocolTimer);
+  protocolTimer = null;
   sim.position = { x: 1.5, y: 1.5 };
   sim.heading = 'E';
   sim.route = [];
   sim.routeIndex = 0;
+  sim.routePurpose = 'coverage';
   sim.running = false;
   sim.completed = false;
   sim.status = 'Listo';
@@ -478,14 +1169,35 @@ function resetSimulation(silent = false) {
   sim.battery = 100;
   sim.tank = 100;
   sim.spraying = false;
+  sim.sprayMode = 'AUTO';
+  protocolState.phase = 'idle';
+  protocolState.remaining = 0;
+  protocolState.sample = null;
+  protocolState.match = null;
+  protocolState.site = null;
+  protocolState.resumeAfterProtocol = false;
+  protocolState.autoSample = false;
+  protocolState.treatmentReturn = false;
+  protocolState.activeMissionSample = null;
+  protocolState.recordedSample = null;
+  protocolState.recordPending = false;
+  protocolState.recordError = '';
+  protocolState.stopLatched = false;
+  protocolState.stopReason = '';
+  handledSampleSites.clear();
+  sampleExclusions.clear();
+  missionSamples.length = 0;
   detected.clear();
   events.length = 0;
   ui.eventLog.replaceChildren();
   clearCoverage();
+  sampleMarker.visible = false;
   buildScenario();
   clearRoute();
   updateSensors();
   syncRobotMesh();
+  updateRobotProcess(0);
+  updateProtocolUI();
   updateUI();
   if (!silent) addEvent('Sistema listo', 'Simulación 3D reiniciada.');
 }
@@ -520,7 +1232,7 @@ function updateSensors() {
 
 function updateUI() {
   const coverage = coveragePercent();
-  ui.status.textContent = sim.running ? 'En operación' : sim.completed ? 'Completado' : sim.status;
+  ui.status.textContent = sim.running ? 'En operación' : sim.completed && protocolState.phase !== 'unknownComplete' ? 'Completado' : sim.status;
   ui.coverage.textContent = `${coverage}%`;
   ui.coverageMini.textContent = `${coverage}%`;
   ui.coverageBar.style.width = `${coverage}%`;
@@ -539,6 +1251,7 @@ function updateUI() {
   ui.humiditySensor.textContent = `${sim.sensors.humidity.toFixed(0)} %`;
   ui.vocSensor.textContent = `${sim.sensors.voc} índice`;
   ui.sprayBtn.innerHTML = `<span aria-hidden="true">◉</span> Pulverización: ${sim.sprayMode}`;
+  updateProtocolUI();
 }
 
 function syncRobotMesh() {
@@ -551,6 +1264,8 @@ function syncRobotMesh() {
 }
 
 function shouldSpray() {
+  if (protocolState.stopLatched || ['scanning', 'pending', 'preparing', 'isolated', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase)) return false;
+  if (protocolState.phase === 'applying') return true;
   if (sim.tank <= 0) return false;
   if (sim.sprayMode === 'ON') return true;
   if (sim.sprayMode === 'OFF') return false;
@@ -584,6 +1299,7 @@ function moveToward(target, dt, speed) {
     sim.status = 'Obstáculo';
     return false;
   }
+  if ((currentCell.x !== nextCell.x || currentCell.y !== nextCell.y) && detectSampleAt(nextCell.x, nextCell.y)) return false;
   if (Math.abs(dx) > Math.abs(dy)) setHeading(Math.sign(dx), 0);
   else setHeading(0, Math.sign(dy));
   sim.position.x = nx;
@@ -611,6 +1327,7 @@ function manualStep(dt, speed) {
   if (!selected) return;
   const [, dx, dy] = selected;
   setHeading(dx, dy);
+  const currentCell = positionCell();
   const nextX = sim.position.x + dx * speed * dt;
   const nextY = sim.position.y + dy * speed * dt;
   const cell = { x: Math.floor(nextX), y: Math.floor(nextY) };
@@ -618,16 +1335,22 @@ function manualStep(dt, speed) {
     detectObstacle(cell.x, cell.y);
     return;
   }
+  if ((currentCell.x !== cell.x || currentCell.y !== cell.y) && detectSampleAt(cell.x, cell.y)) return;
   const distance = Math.hypot(nextX - sim.position.x, nextY - sim.position.y);
   sim.position.x = nextX;
   sim.position.y = nextY;
   sim.distance += distance * cellSize / scale;
 }
 
-function tick(dt) {
+function tick(dt, elapsedDt = dt) {
+  const protocolActive = ['scanning', 'preparing', 'applying'].includes(protocolState.phase);
+  if (protocolActive && !sim.running) {
+    sim.elapsed += elapsedDt;
+    sim.battery = Math.max(0, sim.battery - elapsedDt * 0.06);
+  }
   if (sim.running) {
-    sim.elapsed += dt;
-    sim.battery = Math.max(0, sim.battery - dt * 0.06 * Number(ui.speedSelect.value));
+    sim.elapsed += elapsedDt;
+    sim.battery = Math.max(0, sim.battery - elapsedDt * 0.06 * Number(ui.speedSelect.value));
     if (ui.modeSelect.value === 'auto') {
       let remaining = 4 * Number(ui.speedSelect.value) * dt;
       while (remaining > 0 && sim.routeIndex < sim.route.length && sim.running) {
@@ -644,9 +1367,14 @@ function tick(dt) {
       }
       if (sim.running && sim.routeIndex >= sim.route.length) {
         sim.running = false;
-        sim.completed = true;
-        sim.status = 'Completado';
-        addEvent('Misión finalizada', `Cobertura alcanzada: ${coveragePercent()}%.`);
+        sim.sprayMode = 'OFF';
+        if (sim.routePurpose === 'sample-return') {
+          protocolState.phase = 'pendingTreatment';
+          sim.status = 'Punto de muestra · confirmar tratamiento';
+          addEvent('Muestra alcanzada al cierre', `${protocolState.activeMissionSample?.site.id || ''} · robot detenido sin pulverizar.`);
+        } else {
+          completeCoverageMission();
+        }
       }
     } else {
       manualStep(dt, 3 * Number(ui.speedSelect.value));
@@ -662,13 +1390,24 @@ function tick(dt) {
 }
 
 function startMission() {
+  if (protocolState.stopLatched) {
+    toast('Paro seguro activo. Reinicia la misión tras verificar el área.');
+    return;
+  }
+  if (['scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) {
+    toast('La misión está atendiendo muestras. Usa la acción indicada en el panel de protocolo.');
+    return;
+  }
   if (ui.modeSelect.value === 'auto') {
     if (!sim.route.length || sim.routeIndex >= sim.route.length) {
       sim.route = buildCoverageRoute();
+      sim.routePurpose = 'coverage';
       sim.routeIndex = sim.route.length > 1 ? 1 : 0;
+      sim.sprayMode = 'AUTO';
       drawRoute();
       addEvent('Ruta generada', `${ui.algorithmSelect.value.toUpperCase()} generó ${sim.route.length} puntos de cobertura.`);
     }
+    if (protocolState.phase === 'complete') sim.sprayMode = 'AUTO';
     if (sim.route.length < 2) {
       toast('No se encontró una ruta de cobertura.');
       return;
@@ -683,6 +1422,7 @@ function startMission() {
 
 function selectSceneDestination(event) {
   if (!auth.user || auth.user.role === 'observer' || ui.modeSelect.value !== 'auto') return;
+  if (['scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) return;
   const bounds = renderer.domElement.getBoundingClientRect();
   const pointer = new THREE.Vector2((event.clientX - bounds.left) / bounds.width * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1);
   const raycaster = new THREE.Raycaster();
@@ -702,6 +1442,7 @@ function selectSceneDestination(event) {
     return;
   }
   sim.route = route;
+  sim.routePurpose = 'coverage';
   sim.routeIndex = 1;
   sim.completed = false;
   drawRoute();
@@ -719,6 +1460,10 @@ ui.pauseBtn.addEventListener('click', () => {
 });
 ui.resetBtn.addEventListener('click', () => resetSimulation(false));
 ui.sprayBtn.addEventListener('click', () => {
+  if (protocolState.stopLatched || ['scanning', 'pending', 'preparing', 'applying', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) {
+    toast('Pulverización bloqueada por el estado del protocolo.');
+    return;
+  }
   sim.sprayMode = sim.sprayMode === 'AUTO' ? 'OFF' : sim.sprayMode === 'OFF' ? 'ON' : 'AUTO';
   addEvent('Pulverización', `Modo cambiado a ${sim.sprayMode}.`);
   updateUI();
@@ -746,6 +1491,26 @@ ui.algorithmSelect.addEventListener('change', () => {
   addEvent('Algoritmo cambiado', ui.algorithmSelect.value.toUpperCase());
 });
 ui.speedSelect.addEventListener('change', () => ui.speedSelect.blur());
+ui.analyzeBtn.addEventListener('click', analyzeSample);
+ui.confirmProtocolBtn.addEventListener('click', confirmProtocol);
+ui.safetyStopBtn.addEventListener('click', () => emergencyStop());
+ui.safetyStopBtnPanel.addEventListener('click', () => emergencyStop());
+ui.cutawayBtn.addEventListener('click', () => {
+  robotModel.internals.visible = !robotModel.internals.visible;
+  robotModel.shell.visible = !robotModel.internals.visible;
+  if (robotModel.internals.visible) {
+    const target = robotMesh.position.clone().add(new THREE.Vector3(0, 0.47, 0));
+    controls.target.copy(target);
+    camera.position.copy(target).add(new THREE.Vector3(2.8, 2.5, 3.1).normalize().multiplyScalar(3.9));
+    controls.minDistance = 2.2;
+  } else {
+    controls.target.copy(overviewCameraTarget);
+    camera.position.copy(overviewCameraPosition);
+    controls.minDistance = 7;
+  }
+  camera.updateProjectionMatrix();
+  updateProtocolUI();
+});
 ui.clearLogBtn.addEventListener('click', () => {
   ui.eventLog.replaceChildren();
   events.length = 0;
@@ -754,6 +1519,7 @@ renderer.domElement.addEventListener('click', selectSceneDestination);
 
 document.addEventListener('keydown', (event) => {
   if (!auth.user || auth.user.role === 'observer') return;
+  if (protocolState.stopLatched || ['scanning', 'pending', 'preparing', 'applying', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space'].includes(event.key)) event.preventDefault();
   keys.add(event.key);
@@ -764,6 +1530,11 @@ document.addEventListener('keydown', (event) => {
 });
 document.addEventListener('keyup', (event) => keys.delete(event.key));
 window.addEventListener('blur', () => keys.clear());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && ['scanning', 'preparing', 'applying'].includes(protocolState.phase)) {
+    emergencyStop('Pestaña oculta durante el protocolo: paro seguro activado y salidas inhibidas.');
+  }
+});
 
 async function saveReport() {
   try {
@@ -772,7 +1543,12 @@ async function saveReport() {
       duration_seconds: Number(sim.elapsed.toFixed(2)), coverage_percent: coveragePercent(), obstacles_detected: detected.size,
       distance_m: Number(sim.distance.toFixed(2)), spray_seconds: Number(sim.spraySeconds.toFixed(2)),
       battery_percent: Number(sim.battery.toFixed(1)), tank_percent: Number(sim.tank.toFixed(1)),
-      sensor_snapshot: { ...sim.sensors }, notes: 'Simulación 3D CleanBot'
+      sensor_snapshot: {
+        ...sim.sensors,
+        protocol_phase: protocolState.phase,
+        sample_classification: protocolState.match?.classification || (protocolState.sample === 'unknown' ? 'Señal no identificada' : 'Sin muestra')
+      },
+      notes: protocolState.match ? `Demo ${protocolState.match.protocol} · ${protocolState.phase}` : 'Simulación 3D CleanBot'
     };
     const data = await api('/api/reports', { method: 'POST', body: JSON.stringify(payload) });
     toast(`Reporte #${data.report_id} guardado en SQLite.`);
@@ -797,6 +1573,74 @@ async function loadReports() {
         row.appendChild(cell);
       }
       ui.reportsTable.appendChild(row);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function retainUnknownSample(item = null) {
+  const site = item?.site || protocolState.site;
+  const location = site || positionCell();
+  try {
+    const data = await api('/api/samples', {
+      method: 'POST',
+      body: JSON.stringify({
+        scenario: ui.scenarioSelect.value,
+        site_id: site?.id || `MANUAL-${Date.now()}`,
+        sample_type: 'unknown',
+        classification: DEMO_SAMPLES.unknown.classification,
+        location_x: location.x,
+        location_y: location.y
+      })
+    });
+    if (!item || protocolState.site?.id === site?.id) protocolState.recordedSample = data.sample;
+    if (!item || protocolState.site?.id === site?.id) protocolState.recordError = '';
+    if (item) item.sampleCode = data.sample.sample_code;
+    addEvent('Muestra retenida', `${data.sample.sample_code} · ${data.sample.sample_status} · laboratorio pendiente.`);
+    await loadRetainedSamples();
+    return data.sample;
+  } catch (error) {
+    protocolState.recordError = `Registro no confirmado: ${error.message}`;
+    addEvent('Error al registrar muestra', protocolState.recordError);
+    toast('Muestra no identificada: paro seguro activo, pero no se confirmó el guardado.');
+    return null;
+  } finally {
+    if (!item || protocolState.site?.id === site?.id) protocolState.recordPending = false;
+    updateProtocolUI();
+    updateUI();
+  }
+}
+
+async function loadRetainedSamples() {
+  if (!auth.user) return;
+  try {
+    const data = await api('/api/samples');
+    ui.retainedSamples.replaceChildren();
+    if (!data.samples.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.textContent = 'No hay muestras retenidas.';
+      row.appendChild(cell);
+      ui.retainedSamples.appendChild(row);
+      return;
+    }
+    for (const sample of data.samples) {
+      const row = document.createElement('tr');
+      const values = [
+        sample.sample_code,
+        SCENARIOS[sample.scenario]?.title.split(' · ')[0] || sample.scenario,
+        `${sample.site_id} · ${sample.location_x},${sample.location_y}`,
+        'Retenida para laboratorio',
+        new Date(sample.created_at).toLocaleString()
+      ];
+      for (const value of values) {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.appendChild(cell);
+      }
+      ui.retainedSamples.appendChild(row);
     }
   } catch (error) {
     console.error(error);
@@ -860,10 +1704,12 @@ function resizeScene() {
 
 function loop(timestamp) {
   if (!lastFrame) lastFrame = timestamp;
-  const dt = Math.min((timestamp - lastFrame) / 1000, 0.05);
+  const elapsedDt = Math.min((timestamp - lastFrame) / 1000, 0.5);
+  const dt = Math.min(elapsedDt, 0.05);
   lastFrame = timestamp;
-  tick(dt);
+  tick(dt, elapsedDt);
   syncRobotMesh();
+  updateRobotProcess(dt);
   controls.update();
   renderer.render(scene, camera);
   if (timestamp - lastUiUpdate > 120) {
