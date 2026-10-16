@@ -36,13 +36,22 @@ El backend de Python usa solo su biblioteca estándar. La librería Three.js se 
 
 En modo automático, inicia una ruta de cobertura o haz clic sobre una celda libre para navegar a un destino. En modo manual, usa WASD o las flechas; con pulverización `AUTO`, mantén Espacio para simular la aplicación.
 
-## Muestra y protocolo seguro (demostración)
+## Residuos y decisiones del operador
 
-- En modo automático, el robot encuentra puntos de muestra preconfigurados, toma una muestra conceptual, excluye esa zona de la pulverización y continúa limpiando el resto. No hay sensor químico conectado ni identificación de sustancias reales.
-- Las coincidencias conocidas muestran producto y perfil de ficha demo y quedan en cola. Al terminar la cobertura, el operador puede confirmar el regreso sin pulverización; al llegar al punto, una segunda confirmación inicia el tratamiento localizado.
-- Una señal no identificada se sella y registra en SQLite, pero no se visita de nuevo ni se le aplica producto. La misión termina con la zona pendiente, el código de custodia y el caso marcado para revisión de laboratorio.
-- El control **Simular análisis** permite probar manualmente otra clase. El perfil de dosificación es solo un identificador de ficha: la demo no calcula ni muestra cantidades.
-- Un sistema real necesitaría instrumentación analítica validada, evaluación de riesgos, fichas de seguridad, compatibilidad documentada, productos aprobados por la instalación y revisión de personal responsable. Nunca debe improvisar mezclas para una muestra desconocida.
+- Con protocolo conocido: tratamiento local al detectar, sin regreso al final; luego sigue la cobertura pendiente.
+- Residuo desconocido: alerta y parada sin tomar muestra ni pulverizar. El operador puede activar la vista 3D simulada y autorizar o rechazar la toma.
+- Solo una toma autorizada crea custodia para laboratorio. Rechazar deja la zona excluida sin crear una muestra.
+- Ambas decisiones recalculan desde la posición actual conservando las celdas limpiadas. El plan favorece seguir recto y busca cobertura pendiente; puede cruzar zonas limpias para conectar sectores. AUTO no pulveriza una huella completamente limpia.
+- La cobertura mide el área no excluida. Las zonas desconocidas siguen pendientes de revisión.
+- El catálogo del administrador permite reconocer firmas en futuras misiones. Todo el flujo es simulado; la cámara no determina corrosividad ni identifica sustancias.
+
+## Configurar residuos y protocolos
+
+Abre **Configurar residuos del escenario**, encima del mapa. Selecciona **Colocar residuo**, elige el tipo y haz clic en suelo libre. Para una firma personalizada, elige **Desconocido / firma personalizada** y escribe, por ejemplo, `SIM-RESIDUO-01`. Si esa firma tiene protocolo en el catálogo, el robot la reconocerá. Puedes usar la misma firma en varios puntos.
+
+Para quitar residuos usa **Quitar residuo** y haz clic cerca de uno, o el botón **Quitar** de su fila. **Quitar todos** vacía el escenario; **Restaurar ejemplos** recupera los puntos originales. La configuración se conserva en este navegador, por escenario, y Reiniciar conserva tus residuos. Para editar después de iniciar una misión, primero pulsa **Reiniciar**. Vuelve a **Navegar** para seleccionar destinos con clics.
+
+Para agregar un protocolo inicia sesión como administrador (`admin` / `admin123` en la demo). Pulsa **Registrar protocolo** en la fila del residuo personalizado, o busca el formulario del catálogo en el panel de administración. Completa firma, clasificación, código de protocolo, código de producto, ID del perfil y cartucho; pulsa **Guardar o actualizar protocolo**. Ejemplo de identificadores de simulación: `SIM-RESIDUO-01`, `Residuo demo`, `PR-SIM-01`, `P-SIM-01`, `DP-SIM-01`, cartucho A. Usa exactamente la misma firma en el residuo y el catálogo. La correspondencia se aplica a futuras detecciones; no cambia decisiones ya ejecutadas. Los códigos representan referencias simuladas, no recetas ni cantidades.
 
 ## Alcance
 

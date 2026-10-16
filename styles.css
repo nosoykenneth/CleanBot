@@ -162,6 +162,10 @@ th { color: var(--muted); font: 9px var(--mono); }
 td:first-child { color: var(--green); font-family: var(--mono); }
 .admin-panel { width: min(1240px, calc(100% - 64px)); margin: 0 auto 65px; }
 .user-form { grid-template-columns: 1.4fr 1fr 1fr .8fr auto; gap: 8px; margin-bottom: 12px; }
+.protocol-admin { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.protocol-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 14px 0; }
+.protocol-form input, .protocol-form select { min-width: 0; width: 100%; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); padding: 10px; font: 11px var(--sans); }
+.protocol-form button { grid-column: 1 / -1; justify-self: start; }
 .overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; background: rgba(12, 24, 20, .72); backdrop-filter: blur(4px); }
 .overlay.hidden, .hidden { display: none !important; }
 .login-card { display: grid; gap: 13px; width: min(410px, 100%); padding: 26px; border: 1px solid var(--line); background: var(--paper); box-shadow: 0 24px 80px rgba(0,0,0,.24); }
@@ -203,6 +207,7 @@ footer span:last-child { text-align: right; font-size: 9px; }
   .config-grid { grid-template-columns: 1fr 1fr; }
   .admin-panel { width: min(100% - 40px, 700px); }
   .user-form { grid-template-columns: 1fr 1fr; }
+  .protocol-form { grid-template-columns: 1fr 1fr; }
   .canvas-wrap { height: clamp(330px, 58vw, 460px); }
 }
 @media (max-width: 560px) {
@@ -230,6 +235,7 @@ footer span:last-child { text-align: right; font-size: 9px; }
   .controls { display: grid; grid-template-columns: 1fr 1fr; }
   .controls button { padding: 10px 8px; font-size: 10px; }
   .user-form { grid-template-columns: 1fr; }
+  .protocol-form { grid-template-columns: 1fr; }
   .admin-panel { width: calc(100% - 28px); padding: 14px; }
   .proposal { padding-top: 30px; margin-bottom: 40px; }
   .proposal-heading { grid-template-columns: 1fr; gap: 13px; }
@@ -245,3 +251,10 @@ footer span:last-child { text-align: right; font-size: 9px; }
   footer { min-height: 70px; padding: 13px 16px; align-items: flex-start; flex-direction: column; gap: 7px; }
   footer span:last-child { text-align: left; }
 }
+.residue-editor { margin: 18px 0; padding: 16px; border: 1px solid #cbd5cc; border-radius: 8px; }
+.residue-editor summary { cursor: pointer; font-weight: 700; }
+.residue-editor p { margin: 12px 0; }
+.residue-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.residue-tools label { display: grid; gap: 6px; flex: 1 1 180px; }
+.residue-tools input, .residue-tools select { width: 100%; min-height: 42px; }
+#residueList button { margin: 3px; }

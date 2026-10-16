@@ -7,6 +7,7 @@ import io
 import json
 import mimetypes
 import os
+import re
 import secrets
 import sqlite3
 import threading
@@ -87,6 +88,7 @@ def init_db() -> None:
             user_id INTEGER NOT NULL,
             scenario TEXT NOT NULL CHECK(scenario IN ('hospital','industry','warehouse')),
             site_id TEXT NOT NULL,
+            signature_id TEXT NOT NULL DEFAULT 'UNCLASSIFIED-DEMO',
             sample_type TEXT NOT NULL CHECK(sample_type = 'unknown'),
             classification TEXT NOT NULL,
             location_x INTEGER NOT NULL,
@@ -96,9 +98,37 @@ def init_db() -> None:
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
 
+        CREATE TABLE IF NOT EXISTS approved_protocols (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            signature_id TEXT NOT NULL UNIQUE,
+            classification TEXT NOT NULL,
+            protocol_code TEXT NOT NULL,
+            product_code TEXT NOT NULL,
+            dose_profile TEXT NOT NULL,
+            cartridge_id TEXT NOT NULL CHECK(cartridge_id IN ('A','B','C')),
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1)),
+            created_by INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(created_by) REFERENCES users(id)
+        );
+
         CREATE UNIQUE INDEX IF NOT EXISTS retained_samples_site_once
         ON retained_samples(user_id, scenario, site_id);
         """
+    )
+
+    sample_columns = {row["name"] for row in conn.execute("PRAGMA table_info(retained_samples)")}
+    if "signature_id" not in sample_columns:
+        conn.execute("ALTER TABLE retained_samples ADD COLUMN signature_id TEXT NOT NULL DEFAULT 'UNCLASSIFIED-DEMO'")
+    conn.execute(
+        "UPDATE retained_samples SET signature_id='SIM-HOSPITAL-02' WHERE scenario='hospital' AND site_id='H-02' AND signature_id='UNCLASSIFIED-DEMO'"
+    )
+    conn.execute(
+        "UPDATE retained_samples SET signature_id='SIM-INDUSTRY-02' WHERE scenario='industry' AND site_id='I-02' AND signature_id='UNCLASSIFIED-DEMO'"
+    )
+    conn.execute(
+        "UPDATE retained_samples SET signature_id='SIM-WAREHOUSE-02' WHERE scenario='warehouse' AND site_id='B-02' AND signature_id='UNCLASSIFIED-DEMO'"
     )
 
     seeds = [
@@ -298,6 +328,19 @@ class CleanBotHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
 
+        if path == "/api/protocols":
+            session = self._auth()
+            if not session:
+                self._send_json({"error": "No autenticado"}, HTTPStatus.UNAUTHORIZED)
+                return
+            conn = db_connect()
+            rows = conn.execute(
+                "SELECT signature_id, classification, protocol_code, product_code, dose_profile, cartridge_id, created_at, updated_at FROM approved_protocols WHERE is_active=1 ORDER BY signature_id"
+            ).fetchall()
+            conn.close()
+            self._send_json({"protocols": [dict(row) for row in rows]})
+            return
+
         if path == "/api/samples":
             session = self._auth()
             if not session:
@@ -307,18 +350,30 @@ class CleanBotHandler(BaseHTTPRequestHandler):
             if session["role"] == "operator":
                 rows = conn.execute(
                     """
-                    SELECT s.*, u.username, u.full_name
+                          SELECT s.*, u.username, u.full_name,
+                              p.classification AS approved_classification,
+                              p.protocol_code AS approved_protocol_code,
+                              p.product_code AS approved_product_code,
+                              p.dose_profile AS approved_dose_profile,
+                              p.cartridge_id AS approved_cartridge_id
                     FROM retained_samples s JOIN users u ON u.id=s.user_id
-                    WHERE s.user_id=? ORDER BY s.id DESC LIMIT 100
+                          LEFT JOIN approved_protocols p ON p.signature_id=s.signature_id AND p.is_active=1
+                    WHERE s.user_id=? ORDER BY s.id DESC
                     """,
                     (session["id"],),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     """
-                    SELECT s.*, u.username, u.full_name
+                          SELECT s.*, u.username, u.full_name,
+                              p.classification AS approved_classification,
+                              p.protocol_code AS approved_protocol_code,
+                              p.product_code AS approved_product_code,
+                              p.dose_profile AS approved_dose_profile,
+                              p.cartridge_id AS approved_cartridge_id
                     FROM retained_samples s JOIN users u ON u.id=s.user_id
-                    ORDER BY s.id DESC LIMIT 100
+                          LEFT JOIN approved_protocols p ON p.signature_id=s.signature_id AND p.is_active=1
+                    ORDER BY s.id DESC
                     """
                 ).fetchall()
             conn.close()
@@ -432,9 +487,10 @@ class CleanBotHandler(BaseHTTPRequestHandler):
 
             scenario = str(body.get("scenario", ""))
             site_id = str(body.get("site_id", "")).strip()[:40]
+            signature_id = str(body.get("signature_id", "UNCLASSIFIED-DEMO")).strip()[:60]
             sample_type = str(body.get("sample_type", ""))
             classification = str(body.get("classification", "Señal no identificada"))[:120]
-            if scenario not in {"hospital", "industry", "warehouse"} or not site_id or sample_type != "unknown":
+            if scenario not in {"hospital", "industry", "warehouse"} or not site_id or sample_type != "unknown" or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{1,59}", signature_id):
                 self._send_json({"error": "Datos de muestra desconocida inválidos"}, HTTPStatus.BAD_REQUEST)
                 return
             try:
@@ -457,12 +513,12 @@ class CleanBotHandler(BaseHTTPRequestHandler):
             cur = conn.execute(
                 """
                 INSERT INTO retained_samples(
-                    sample_code, user_id, scenario, site_id, sample_type, classification,
+                    sample_code, user_id, scenario, site_id, signature_id, sample_type, classification,
                     location_x, location_y, sample_status, created_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
-                    sample_code, session["id"], scenario, site_id, sample_type, classification,
+                    sample_code, session["id"], scenario, site_id, signature_id, sample_type, classification,
                     location_x, location_y, "retained_for_lab_review", utc_now(),
                 ),
             )
@@ -476,6 +532,7 @@ class CleanBotHandler(BaseHTTPRequestHandler):
                     "sample_code": sample_code,
                     "scenario": scenario,
                     "site_id": site_id,
+                    "signature_id": signature_id,
                     "classification": classification,
                     "location_x": location_x,
                     "location_y": location_y,
@@ -483,6 +540,62 @@ class CleanBotHandler(BaseHTTPRequestHandler):
                     "created_at": utc_now(),
                 },
             }, HTTPStatus.CREATED)
+            return
+
+        if path == "/api/protocols":
+            session = self._auth({"admin"})
+            if session == "forbidden":
+                self._send_json({"error": "Solo un administrador puede actualizar protocolos"}, HTTPStatus.FORBIDDEN)
+                return
+            if not session:
+                self._send_json({"error": "No autenticado"}, HTTPStatus.UNAUTHORIZED)
+                return
+
+            signature_id = str(body.get("signature_id", "")).strip()
+            classification = str(body.get("classification", "")).strip()[:120]
+            protocol_code = str(body.get("protocol_code", "")).strip()
+            product_code = str(body.get("product_code", "")).strip()
+            dose_profile = str(body.get("dose_profile", "")).strip()
+            cartridge_id = str(body.get("cartridge_id", "")).strip()
+            identifier = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{1,59}")
+            if (
+                not identifier.fullmatch(signature_id)
+                or not classification
+                or not identifier.fullmatch(protocol_code)
+                or not identifier.fullmatch(product_code)
+                or not identifier.fullmatch(dose_profile)
+                or cartridge_id not in {"A", "B", "C"}
+            ):
+                self._send_json({"error": "Usa una firma, producto, protocolo y perfil como códigos; no ingreses fórmulas ni cantidades."}, HTTPStatus.BAD_REQUEST)
+                return
+
+            now = utc_now()
+            conn = db_connect()
+            conn.execute(
+                """
+                INSERT INTO approved_protocols(
+                    signature_id, classification, protocol_code, product_code, dose_profile,
+                    cartridge_id, is_active, created_by, created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,1,?,?,?)
+                ON CONFLICT(signature_id) DO UPDATE SET
+                    classification=excluded.classification,
+                    protocol_code=excluded.protocol_code,
+                    product_code=excluded.product_code,
+                    dose_profile=excluded.dose_profile,
+                    cartridge_id=excluded.cartridge_id,
+                    is_active=1,
+                    created_by=excluded.created_by,
+                    updated_at=excluded.updated_at
+                """,
+                (signature_id, classification, protocol_code, product_code, dose_profile, cartridge_id, session["id"], now, now),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT signature_id, classification, protocol_code, product_code, dose_profile, cartridge_id, created_at, updated_at FROM approved_protocols WHERE signature_id=?",
+                (signature_id,),
+            ).fetchone()
+            conn.close()
+            self._send_json({"ok": True, "protocol": dict(row)}, HTTPStatus.CREATED)
             return
 
         if path == "/api/users":

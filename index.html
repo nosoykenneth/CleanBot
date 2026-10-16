@@ -71,6 +71,19 @@
         </div>
       </div>
 
+      <details class="residue-editor" id="residueEditor">
+        <summary>Configurar residuos del escenario</summary>
+        <p>Configura antes de iniciar. Para cambiar una misión en curso, pulsa Reiniciar. Los cambios se guardan en este navegador por escenario.</p>
+        <div class="residue-tools">
+          <label>Acción en el mapa<select id="residueAction"><option value="navigate">Navegar</option><option value="add">Colocar residuo</option><option value="remove">Quitar residuo</option></select></label>
+          <label>Tipo<select id="residueType"><option value="organic">Orgánico conocido</option><option value="biological">Biológico conocido</option><option value="unknown">Desconocido / firma personalizada</option></select></label>
+          <label>Firma del residuo<input id="residueSignature" maxlength="60" placeholder="Ej. SIM-RESIDUO-01"></label>
+          <button id="clearResiduesBtn" type="button">Quitar todos</button>
+          <button id="restoreResiduesBtn" type="button">Restaurar ejemplos</button>
+        </div>
+        <p id="residueEditorHint" aria-live="polite">Elige Colocar o Quitar y haz clic en el suelo del mapa.</p>
+        <div class="table-wrap"><table><thead><tr><th>Residuo / posición</th><th>Firma</th><th>Protocolo</th><th>Acciones</th></tr></thead><tbody id="residueList"></tbody></table></div>
+      </details>
       <div class="canvas-wrap" id="sceneWrap">
         <div id="simCanvas" role="img" aria-label="Maqueta tridimensional de un robot de desinfección recorriendo una habitación hospitalaria"></div>
         <div class="scene-label"><span class="live-indicator"></span> VISTA EN TIEMPO REAL</div>
@@ -149,6 +162,15 @@
           </label>
           <button id="analyzeBtn" class="primary" type="button"><span aria-hidden="true">⌕</span> Simular análisis</button>
           <button id="confirmProtocolBtn" type="button" disabled><span aria-hidden="true">✓</span> Confirmar protocolo</button>
+          <div id="unknownDecision" hidden role="alert">
+            <strong>Alerta: residuo desconocido</strong>
+            <p>Robot detenido, sin toma ni producto. Ante posible corrosividad puedes evitar la zona.</p>
+            <button id="inspectionCameraBtn" type="button">Activar cámara simulada</button>
+            <div id="inspectionView" hidden></div>
+            <p>Vista 3D simulada: no determina la composición ni la corrosividad.</p>
+            <button id="collectUnknownBtn" type="button">Autorizar toma de muestra</button>
+            <button id="skipUnknownBtn" type="button">No tomar: evitar zona y continuar</button>
+          </div>
           <div class="analysis-result" aria-live="polite">
             <div><span>Lectura</span><strong id="sampleResult">Sin muestra analizada</strong></div>
             <div><span>Protocolo</span><strong id="protocolCode">Sin asignar</strong></div>
@@ -178,7 +200,7 @@
           </div>
           <div class="retained-samples">
             <div class="cartridge-heading"><strong>Muestras retenidas</strong><span>Casos no identificados enviados a revisión</span></div>
-            <div class="table-wrap"><table><thead><tr><th>Código</th><th>Escenario</th><th>Punto</th><th>Estado</th><th>Fecha</th></tr></thead><tbody id="retainedSamples"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Código</th><th>Escenario</th><th>Punto</th><th>Firma demo</th><th>Estado</th><th>Fecha</th></tr></thead><tbody id="retainedSamples"></tbody></table></div>
           </div>
           <p class="protocol-footnote">Un sistema real requiere sensores validados, fichas de seguridad, compatibilidad documentada, límites de uso y aprobación responsable. Ante una lectura ambigua, se detiene y solicita evaluación humana; nunca formula una respuesta por cuenta propia.</p>
         </div>
@@ -218,6 +240,20 @@
         <button class="primary" type="submit">Crear usuario</button>
       </form>
       <div class="table-wrap"><table><thead><tr><th>ID</th><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Creado</th></tr></thead><tbody id="usersTable"></tbody></table></div>
+      <div class="protocol-admin">
+        <div class="panel-header"><div><div class="section-kicker">CATÁLOGO AUTORIZADO</div><h2>Registrar protocolo para una firma</h2><p>Usa la firma simulada de una muestra retenida y códigos de ficha aprobados por la empresa.</p></div></div>
+        <form id="protocolForm" class="protocol-form">
+          <input id="protocolSignature" placeholder="Firma de muestra (p. ej. SIM-H-02)" pattern="[A-Za-z0-9._-]{2,60}" required>
+          <input id="protocolClassification" placeholder="Clasificación validada" maxlength="120" required>
+          <input id="protocolCodeInput" placeholder="Código de protocolo" pattern="[A-Za-z0-9._-]{2,60}" required>
+          <input id="protocolProduct" placeholder="Código de producto aprobado" pattern="[A-Za-z0-9._-]{2,60}" required>
+          <input id="protocolDoseProfile" placeholder="ID de perfil de ficha (sin cantidades)" pattern="[A-Za-z0-9._-]{2,60}" required>
+          <select id="protocolCartridge"><option value="A">Cartucho A · P-01</option><option value="B">Cartucho B · P-02</option><option value="C">Cartucho C · P-03</option></select>
+          <button class="primary" type="submit">Guardar o actualizar protocolo</button>
+        </form>
+        <p class="protocol-footnote">Agregar un protocolo solo registra una correspondencia aprobada; no valida sensores, compatibilidad ni dosificación física. Los códigos son referencias, no fórmulas.</p>
+        <div class="table-wrap"><table><thead><tr><th>Firma</th><th>Clasificación</th><th>Protocolo</th><th>Producto</th><th>Perfil</th><th>Cartucho</th><th>Estado</th></tr></thead><tbody id="protocolsTable"></tbody></table></div>
+      </div>
     </section>
 
     <section id="propuesta" class="proposal">

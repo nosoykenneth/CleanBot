@@ -15,6 +15,9 @@ const ui = {
   missionSamples: $('missionSamples'),
   cartridgeValues: { A: $('cartridgeA'), B: $('cartridgeB'), C: $('cartridgeC') },
   cartridgeRows: [...document.querySelectorAll('.cartridge-row')],
+  protocolForm: $('protocolForm'), protocolSignature: $('protocolSignature'), protocolClassification: $('protocolClassification'),
+  protocolCodeInput: $('protocolCodeInput'), protocolProduct: $('protocolProduct'), protocolDoseProfile: $('protocolDoseProfile'),
+  protocolCartridge: $('protocolCartridge'), protocolsTable: $('protocolsTable'),
   status: $('status'), elapsed: $('elapsed'), coverage: $('coverage'), coverageMini: $('coverageMini'), coverageBar: $('coverageBar'),
   obstacles: $('obstacles'), sprayState: $('sprayState'), distance: $('distance'), battery: $('battery'), tank: $('tank'),
   frontSensor: $('frontSensor'), leftSensor: $('leftSensor'), rightSensor: $('rightSensor'), tempSensor: $('tempSensor'), humiditySensor: $('humiditySensor'), vocSensor: $('vocSensor'),
@@ -38,7 +41,7 @@ const SCENARIOS = {
       { x: 28, y: 5, w: 7, h: 3, label: 'Camilla B', type: 'bed' }, { x: 9, y: 14, w: 6, h: 4, label: 'Estación', type: 'cart' },
       { x: 21, y: 13, w: 5, h: 6, label: 'Gabinete', type: 'cabinet' }, { x: 30, y: 15, w: 5, h: 4, label: 'Camilla C', type: 'bed' }
     ], zones: [{ x: 1, y: 1, w: 10, h: 2 }, { x: 27, y: 10, w: 8, h: 3 }],
-    samples: [{ id: 'H-01', x: 7, y: 1, type: 'organic' }, { id: 'H-02', x: 28, y: 10, type: 'unknown' }]
+    samples: [{ id: 'H-01', x: 7, y: 1, type: 'organic' }, { id: 'H-02', x: 28, y: 10, type: 'unknown', signature_id: 'SIM-HOSPITAL-02' }]
   },
   industry: {
     title: 'Industria · Planta de proceso', description: 'Maquinaria, tuberías y pasillos de seguridad simulados.', baseTemp: 27.8, baseHumidity: 55,
@@ -47,7 +50,7 @@ const SCENARIOS = {
       { x: 24, y: 2, w: 10, h: 5, label: 'Línea de proceso', type: 'machine' }, { x: 26, y: 11, w: 7, h: 7, label: 'Máquina 2', type: 'machine' },
       { x: 4, y: 16, w: 10, h: 4, label: 'Pallets', type: 'crate' }, { x: 18, y: 17, w: 5, h: 4, label: 'Bomba', type: 'machine' }
     ], zones: [{ x: 1, y: 1, w: 35, h: 2 }, { x: 32, y: 8, w: 4, h: 6 }],
-    samples: [{ id: 'I-01', x: 13, y: 1, type: 'biological' }, { id: 'I-02', x: 34, y: 19, type: 'unknown' }]
+    samples: [{ id: 'I-01', x: 13, y: 1, type: 'biological' }, { id: 'I-02', x: 34, y: 19, type: 'unknown', signature_id: 'SIM-INDUSTRY-02' }]
   },
   warehouse: {
     title: 'Bodega · Almacenamiento', description: 'Estanterías, pallets y corredores para navegación autónoma.', baseTemp: 24.5, baseHumidity: 52,
@@ -57,7 +60,7 @@ const SCENARIOS = {
       { x: 6, y: 15, w: 6, h: 5, label: 'Pallets', type: 'crate' }, { x: 17, y: 14, w: 6, h: 6, label: 'Carga', type: 'crate' },
       { x: 27, y: 15, w: 7, h: 5, label: 'Pallets', type: 'crate' }
     ], zones: [{ x: 1, y: 12, w: 35, h: 2 }],
-    samples: [{ id: 'B-01', x: 7, y: 13, type: 'organic' }, { id: 'B-02', x: 34, y: 13, type: 'unknown' }]
+    samples: [{ id: 'B-01', x: 7, y: 13, type: 'organic' }, { id: 'B-02', x: 34, y: 13, type: 'unknown', signature_id: 'SIM-WAREHOUSE-02' }]
   }
 };
 
@@ -72,9 +75,32 @@ const DEMO_SAMPLES = {
   },
   unknown: {
     classification: 'Señal no identificada', protocol: null, product: null,
-    doseProfile: 'No asignado · muestra retenida', cartridge: null
+    doseProfile: 'No asignado · requiere laboratorio', cartridge: null, signature_id: 'UNCLASSIFIED-DEMO'
   }
 };
+
+const approvedProtocols = new Map();
+let protocolsLoaded = false;
+let retainedSamplesLoaded = false;
+const collectedResidues = new Map();
+const defaultResidues = Object.fromEntries(Object.entries(SCENARIOS).map(([key, value]) => [key, value.samples.map(site => ({ ...site }))]));
+const residueStorageKey = 'cleanbot_residues_v1';
+try {
+  const saved = JSON.parse(localStorage.getItem(residueStorageKey) || '{}');
+  for (const [key, scenario] of Object.entries(SCENARIOS)) {
+    if (!Array.isArray(saved[key])) continue;
+    const ids = new Set(), positions = new Set();
+    scenario.samples = saved[key].filter(site => {
+      if (!site || typeof site.id !== 'string' || !/^[A-Za-z0-9._-]{2,40}$/.test(site.id)
+        || !Number.isInteger(site.x) || !Number.isInteger(site.y) || site.x < 0 || site.x >= cols || site.y < 0 || site.y >= rows
+        || !['organic', 'biological', 'unknown'].includes(site.type)
+        || (site.type === 'unknown' && !/^[A-Za-z0-9][A-Za-z0-9._-]{1,59}$/.test(site.signature_id || ''))
+        || scenario.obstacles.some(o => site.x >= o.x && site.x < o.x + o.w && site.y >= o.y && site.y < o.y + o.h)
+        || ids.has(site.id) || positions.has(`${site.x},${site.y}`)) return false;
+      ids.add(site.id); positions.add(`${site.x},${site.y}`); return true;
+    }).map(site => ({ id: site.id, x: site.x, y: site.y, type: site.type, signature_id: site.signature_id }));
+  }
+} catch { /* Keep defaults when browser storage is unavailable or invalid. */ }
 
 const cartridgeInventory = { A: 12, B: 12, C: 12 };
 
@@ -234,7 +260,7 @@ function buildSampleSite(site) {
   const group = new THREE.Group();
   const center = cellCenter(site.x, site.y);
   group.position.set(center.x, 0, center.z);
-  const color = site.type === 'unknown' ? '#c84f43' : '#d59436';
+  const color = residueColor(site);
   const patch = new THREE.Mesh(new THREE.CircleGeometry(0.11, 24), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.65, depthWrite: false }));
   patch.rotation.x = -Math.PI / 2;
   patch.position.y = 0.018;
@@ -269,6 +295,56 @@ function buildScenario() {
   ui.scenarioTitle.textContent = scenario.title;
   ui.scenarioDescription.textContent = scenario.description;
   ui.assignedZone.textContent = `${scenario.title.split(' · ')[0]} · Zona A`;
+}
+
+function residueColor(site) {
+  return resolveSampleProtocol(site.type, site)?.protocol ? '#d59436' : '#c84f43';
+}
+
+function refreshResidueColors() {
+  for (const site of SCENARIOS[ui.scenarioSelect.value].samples) {
+    const visual = sampleSiteVisuals.get(site.id);
+    if (!visual) continue;
+    const color = residueColor(site);
+    visual.patch.material.color.set(color);
+    visual.ring.material.color.set(color);
+    visual.marker.material.color.set(color);
+    visual.marker.material.emissive.set(color);
+  }
+  if (protocolState.site) {
+    const color = residueColor(protocolState.site);
+    samplePatch.material.color.set(color);
+    sampleRing.material.color.set(color);
+  }
+}
+
+function collectedResidueKey(scenario, site) {
+  return JSON.stringify([scenario, site.id, site.signature_id || DEMO_SAMPLES.unknown.signature_id, site.x, site.y]);
+}
+
+function restoreCollectedResidues() {
+  if (!protocolsLoaded || !retainedSamplesLoaded) return;
+  const scenario = ui.scenarioSelect.value;
+  for (const site of SCENARIOS[scenario].samples) {
+    const sample = collectedResidues.get(collectedResidueKey(scenario, site));
+    if (!sample) continue;
+    if (resolveSampleProtocol(site.type, site)?.protocol) {
+      const index = missionSamples.findIndex(item => item.site.id === site.id && item.status === 'lab');
+      if (index >= 0 && !sim.running && protocolState.phase === 'idle') {
+        missionSamples.splice(index, 1);
+        handledSampleSites.delete(site.id);
+        sampleExclusions.delete(site.id);
+      }
+      continue;
+    }
+    handledSampleSites.add(site.id);
+    sampleExclusions.set(site.id, { x: site.x, y: site.y, radius: SAMPLE_EXCLUSION_RADIUS });
+    if (!missionSamples.some(item => item.site.id === site.id)) {
+      missionSamples.push({ site, sampleType: 'unknown', detectedType: site.type, signatureId: site.signature_id,
+        match: DEMO_SAMPLES.unknown, status: 'lab', sampleCode: sample.sample_code });
+    }
+  }
+  renderMissionSamples();
 }
 
 function buildRobot() {
@@ -457,7 +533,8 @@ function showSampleMarker() {
     sampleMarker.position.set(worldX(sim.position.x + heading.x * 0.55), 0, worldZ(sim.position.y + heading.y * 0.55));
   }
   sampleMarker.visible = true;
-  const color = protocolState.sample === 'unknown' ? '#c84f43' : '#d58c54';
+  const match = resolveSampleProtocol(protocolState.sample, protocolState.site);
+  const color = match?.protocol ? '#d59436' : '#c84f43';
   samplePatch.material.color.set(color);
   sampleRing.material.color.set(color);
 }
@@ -495,7 +572,57 @@ async function api(path, options = {}) {
 function roleLabel(role) { return ({ admin: 'Administrador', operator: 'Operador', observer: 'Observador' })[role] || role; }
 function showLogin() { ui.loginOverlay.classList.remove('hidden'); }
 
+function resolveSampleProtocol(sampleType, site) {
+  if (sampleType !== 'unknown') return DEMO_SAMPLES[sampleType] || DEMO_SAMPLES.unknown;
+  const signature = site?.signature_id || DEMO_SAMPLES.unknown.signature_id;
+  const approved = approvedProtocols.get(signature);
+  return approved ? { ...approved, signature_id: signature } : DEMO_SAMPLES.unknown;
+}
+
+async function loadApprovedProtocols() {
+  protocolsLoaded = false;
+  try {
+    const data = await api('/api/protocols');
+    approvedProtocols.clear();
+    ui.protocolsTable.replaceChildren();
+    if (!data.protocols.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 7;
+      cell.textContent = 'No hay protocolos aprobados adicionales.';
+      row.appendChild(cell);
+      ui.protocolsTable.appendChild(row);
+    }
+    for (const protocol of data.protocols) {
+      approvedProtocols.set(protocol.signature_id, {
+        classification: protocol.classification,
+        protocol: protocol.protocol_code,
+        product: protocol.product_code,
+        doseProfile: protocol.dose_profile,
+        cartridge: protocol.cartridge_id
+      });
+      const row = document.createElement('tr');
+      for (const value of [protocol.signature_id, protocol.classification, protocol.protocol_code, protocol.product_code, protocol.dose_profile, protocol.cartridge_id, 'Activo']) {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.appendChild(cell);
+      }
+      ui.protocolsTable.appendChild(row);
+    }
+  } catch (error) {
+    toast(`No se pudo cargar el catálogo: ${error.message}`);
+  } finally {
+    protocolsLoaded = true;
+    refreshResidueColors();
+    restoreCollectedResidues();
+    renderResidueEditor();
+  }
+}
+
 function enterApp() {
+  protocolsLoaded = false;
+  retainedSamplesLoaded = false;
+  collectedResidues.clear();
   ui.loginOverlay.classList.add('hidden');
   ui.userName.textContent = auth.user.full_name;
   ui.userRole.textContent = roleLabel(auth.user.role);
@@ -508,6 +635,7 @@ function enterApp() {
   resetSimulation(true);
   loadReports();
   loadRetainedSamples();
+  loadApprovedProtocols();
   if (auth.user.role === 'admin') loadUsers();
 }
 
@@ -610,23 +738,51 @@ function findPath(start, goal, algorithm = ui.algorithmSelect.value) {
   return [];
 }
 
-function buildCoverageRoute() {
-  const goals = [];
-  let reverse = false;
-  for (let y = 1; y < rows - 1; y += 3) {
-    const line = [];
-    for (let x = 1; x < cols - 1; x += 3) if (!blocked(x, y)) line.push({ x, y });
-    if (reverse) line.reverse();
-    reverse = !reverse;
-    goals.push(...line);
+function coverageFootprint(point) {
+  const cells = [];
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const x = point.x + dx, y = point.y + dy;
+    if (dx * dx + dy * dy <= 5 && !blocked(x, y)) cells.push(cellKey(x, y));
   }
+  return cells;
+}
+
+function buildCoverageRoute() {
+  // Plan only the remaining coverage, preserving the actual mission history.
+  const planned = new Set(visited);
   let current = positionCell();
   const route = [current];
-  for (const goal of goals) {
-    const segment = findPath(current, goal);
-    if (segment.length > 1) {
-      route.push(...segment.slice(1));
-      current = goal;
+  let direction = null;
+  coverageFootprint(current).forEach(key => planned.add(key));
+  while (true) {
+    const queue = [{ point: current, path: [] }];
+    const seen = new Set([cellKey(current.x, current.y)]);
+    let segment = null;
+    for (let i = 0; i < queue.length; i++) {
+      const { point, path } = queue[i];
+      if (path.length && coverageFootprint(point).some(key => !planned.has(key))) {
+        segment = path;
+        break;
+      }
+      const options = neighbors(point);
+      options.sort((a, b) => {
+        const rank = next => (direction && next.x - point.x === direction.x && next.y - point.y === direction.y ? 100 : 0)
+          + coverageFootprint(next).filter(key => !planned.has(key)).length;
+        return rank(b) - rank(a);
+      });
+      for (const next of options) {
+        const key = cellKey(next.x, next.y);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        queue.push({ point: next, path: [...path, next] });
+      }
+    }
+    if (!segment) break;
+    for (const next of segment) {
+      direction = { x: next.x - current.x, y: next.y - current.y };
+      route.push(next);
+      coverageFootprint(next).forEach(key => planned.add(key));
+      current = next;
     }
   }
   return route;
@@ -677,7 +833,7 @@ function markCoverage() {
       const x = cell.x + ox;
       const y = cell.y + oy;
       const key = cellKey(x, y);
-      if (blockedByObstacle(x, y) || isExcludedSampleCell(x, y) || visited.has(key)) continue;
+      if (blocked(x, y) || visited.has(key)) continue;
       visited.add(key);
       const center = cellCenter(x, y);
       const tile = new THREE.Mesh(coverageGeometry, materials.coverage);
@@ -695,7 +851,16 @@ function freeCellCount() {
   return count;
 }
 
-function coveragePercent() { return Math.min(100, Math.round(visited.size / freeCellCount() * 100)); }
+function remainingCoverageCount() {
+  let count = 0;
+  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++)
+    if (!blocked(x, y) && !visited.has(cellKey(x, y))) count++;
+  return count;
+}
+function coveragePercent() {
+  const total = freeCellCount();
+  return total ? Math.round((total - remainingCoverageCount()) / total * 100) : 100;
+}
 
 function addEvent(event, detail) {
   const time = new Date().toLocaleTimeString('es-EC', { hour12: false });
@@ -724,7 +889,7 @@ function renderMissionSamples() {
     const row = document.createElement('tr');
     const action = item.sampleType === 'unknown'
       ? `Retenida · ${item.sampleCode || 'laboratorio pendiente'}`
-      : item.status === 'treated' ? 'Atendida al final' : 'Pendiente para el regreso';
+      : item.status === 'treated' ? 'Atendida al detectar' : 'Pendiente para el regreso';
     for (const value of [item.site.id, item.match?.classification || 'Señal no identificada', action]) {
       const cell = document.createElement('td');
       cell.textContent = value;
@@ -761,6 +926,8 @@ function updateProtocolUI() {
   const match = protocolState.match || DEMO_SAMPLES[protocolState.sample];
   const copy = {
     idle: ['Sin muestra analizada', 'Sin asignar', 'Sin asignar', 'Sin asignar', 'Sin muestra retenida', 'En espera', 'Lecturas y productos son de demostración; no se identifican sustancias reales.'],
+    awaitingOperator: ['Residuo desconocido', 'Sin protocolo', 'Pulverización bloqueada', 'Sin toma autorizada', siteLabel, 'Esperando al operador', 'La cámara simulada se abre automáticamente. Decide si recoger la muestra o evitar la zona.'],
+    collectingUnknown: ['Residuo desconocido', 'Sin protocolo', 'Pulverización bloqueada', 'Toma autorizada', sampleCode, 'Registrando custodia', 'La zona seguir? excluida del recorrido.'],
     scanning: ['Analizando referencia...', 'Buscando coincidencia', 'Verificando catálogo', 'Consultando perfil aprobado', sampleCode, 'Lectura en curso', 'Cribado conceptual. No equivale a identificación química real.'],
     pending: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', sampleCode, 'Pendiente de confirmación', 'Coincidencia de catálogo demo. La dosificación real debe provenir de la ficha aprobada del producto exacto.'],
     preparing: [match?.classification || 'Referencia compatible', match?.protocol || 'Sin asignar', match?.product || 'Sin producto compatible', match?.doseProfile || 'Sin perfil aprobado', sampleCode, 'Cámara cerrada · enclavada', 'Preparación visual. La demo no calcula cantidades ni muestra una receta.'],
@@ -793,8 +960,8 @@ function updateProtocolUI() {
     : protocolState.phase === 'pendingTreatment'
       ? '<span aria-hidden="true">✓</span> Confirmar tratamiento aprobado'
       : '<span aria-hidden="true">✓</span> Confirmar protocolo';
-  ui.analyzeBtn.disabled = ['scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase) || protocolState.stopLatched || auth.user?.role === 'observer';
-  ui.sampleSelect.disabled = ['scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase) || auth.user?.role === 'observer';
+  ui.analyzeBtn.disabled = ['awaitingOperator', 'collectingUnknown', 'scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase) || protocolState.stopLatched || auth.user?.role === 'observer';
+  ui.sampleSelect.disabled = ['awaitingOperator', 'collectingUnknown', 'scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase) || auth.user?.role === 'observer';
   renderMissionSamples();
   ui.cartridgeRows.forEach((row) => {
     const id = row.dataset.cartridge;
@@ -853,7 +1020,7 @@ function detectSampleAt(x, y) {
   sampleExclusions.set(site.id, { x: site.x, y: site.y, radius: SAMPLE_EXCLUSION_RADIUS });
   const visual = sampleSiteVisuals.get(site.id);
   if (visual) {
-    const color = site.type === 'unknown' ? '#c84f43' : '#4d9b79';
+    const color = residueColor(site);
     visual.patch.material.color.set(color);
     visual.ring.material.color.set(color);
     visual.marker.material.color.set(color);
@@ -871,10 +1038,12 @@ function resumeCoverageAfterSample() {
   drawRoute();
   sim.completed = false;
   sim.running = sim.route.length > 1;
+  sim.sprayMode = 'AUTO';
   sim.status = sim.running ? 'En operación' : 'Cobertura terminada';
   protocolState.autoSample = false;
-  if (sim.running) addEvent('Cobertura reanudada', 'Área de muestra excluida; continúa por el resto del escenario.');
-  else isolateProtocol('No hay ruta de cobertura válida alrededor de la zona de muestra; la cobertura no se declara completa.');
+  if (sim.running) addEvent('Cobertura reanudada', 'Ruta recalculada conservando las celdas limpiadas.');
+  else if (remainingCoverageCount() === 0) completeCoverageMission();
+  else isolateProtocol('Quedan celdas pendientes sin ruta accesible.');
   updateUI();
 }
 
@@ -962,9 +1131,11 @@ function queueMissionSample(match) {
   if (!protocolState.site || missionSamples.some((item) => item.site.id === protocolState.site.id)) return;
   const item = {
     site: protocolState.site,
-    sampleType: protocolState.sample,
+    sampleType: match?.protocol ? 'known' : 'unknown',
+    detectedType: protocolState.sample,
+    signatureId: protocolState.site.signature_id || DEMO_SAMPLES.unknown.signature_id,
     match,
-    status: protocolState.sample === 'unknown' ? 'lab' : 'pending',
+    status: match?.protocol ? 'pending' : 'awaiting',
     sampleCode: null
   };
   missionSamples.push(item);
@@ -1038,45 +1209,43 @@ function emergencyStop(reason = 'Paro seguro activado por el operador; salidas s
 function finishScreening() {
   protocolTimer = null;
   if (protocolState.phase !== 'scanning' || protocolState.stopLatched) return;
-  const match = DEMO_SAMPLES[protocolState.sample];
+  const match = resolveSampleProtocol(protocolState.sample, protocolState.site);
   if (protocolState.autoSample) {
     protocolState.match = match || DEMO_SAMPLES.unknown;
     const item = queueMissionSample(protocolState.match);
+    protocolState.activeMissionSample = item;
     if (!match?.protocol) {
-      protocolState.phase = 'queuedUnknown';
-      protocolState.recordPending = true;
-      sim.status = 'Guardando muestra · área excluida';
-      addEvent('Zona excluida', `${protocolState.site.id} · sin aplicación durante esta misión.`);
+      protocolState.phase = 'awaitingOperator';
+      sim.sprayMode = 'OFF';
+      sim.status = 'Alerta: residuo desconocido ? decisión del operador';
+      addEvent('Alerta al operador', `${item.site.id} ? sin toma ni pulverización. Cámara opcional; autoriza o rechaza la toma.`);
+      toast('Residuo desconocido: revisa el panel y decide si tomar la muestra.');
+      presentUnknownDecision();
       updateUI();
-      retainUnknownSample(item).then((sample) => {
-        if (!sample) {
-          isolateProtocol('No se pudo confirmar la custodia; el robot queda detenido en seguro.', false);
-          return;
-        }
-        item.sampleCode = sample.sample_code;
-        renderMissionSamples();
-        protocolState.recordedSample = sample;
-        protocolState.recordPending = false;
-        sim.status = 'Muestra retenida · cobertura continúa';
-        addEvent('Cobertura reanudada', 'Muestra guardada para laboratorio; la zona permanece excluida.');
-        resumeCoverageAfterSample();
-      });
       return;
     }
-    protocolState.activeMissionSample = item;
-    protocolState.phase = 'queuedKnown';
-    sim.status = 'Muestra sellada · cobertura continúa';
-    addEvent('Zona excluida', `${protocolState.site.id} · ${match.product} reservado para después de la cobertura.`);
-    addEvent('Protocolo aprobado en cola', `${match.protocol} · retorno al punto al completar la cobertura.`);
+    if (!(cartridgeInventory[match.cartridge] > 0)) {
+      isolateProtocol('No hay cartucho compatible disponible.');
+      return;
+    }
+    protocolState.treatmentReturn = true;
+    protocolState.phase = 'preparing';
+    protocolState.remaining = 2.8;
+    sim.status = 'Ejecutando protocolo conocido';
+    addEvent('Protocolo automático', `${item.site.id} ? ${match.protocol} ? tratamiento al detectar.`);
     updateUI();
-    resumeCoverageAfterSample();
+    protocolTimer = setTimeout(beginApplication, 2800);
     return;
   }
   if (!match?.protocol) {
-    protocolState.match = match || DEMO_SAMPLES.unknown;
-    isolateProtocol('Señal no identificada: ruta detenida, cámara cerrada y salida de aplicación bloqueada.');
+    protocolState.match = DEMO_SAMPLES.unknown;
+    protocolState.phase = 'awaitingOperator';
+    sim.status = 'Residuo desconocido: esperando al operador';
+    presentUnknownDecision();
+    updateUI();
     return;
   }
+
   if (cartridgeInventory[match.cartridge] <= 0) {
     protocolState.match = match;
     isolateProtocol('No hay cartucho demo compatible disponible; se requiere intervención humana.');
@@ -1123,6 +1292,12 @@ function finishApplication() {
       addEvent('Zona atendida al cierre', `${item.site.id} · el área deja de estar excluida de la siguiente misión.`);
     }
     protocolState.treatmentReturn = false;
+    if (protocolState.autoSample) {
+      renderMissionSamples();
+      sim.sprayMode = 'AUTO';
+      resumeCoverageAfterSample();
+      return;
+    }
     sim.sprayMode = 'OFF';
     sim.running = false;
     const nextKnown = missionSamples.find((sample) => sample.sampleType !== 'unknown' && sample.status === 'pending');
@@ -1170,6 +1345,8 @@ function resetSimulation(silent = false) {
   sim.tank = 100;
   sim.spraying = false;
   sim.sprayMode = 'AUTO';
+  closeInspectionCamera();
+  $('unknownDecision').hidden = true;
   protocolState.phase = 'idle';
   protocolState.remaining = 0;
   protocolState.sample = null;
@@ -1187,6 +1364,7 @@ function resetSimulation(silent = false) {
   handledSampleSites.clear();
   sampleExclusions.clear();
   missionSamples.length = 0;
+  restoreCollectedResidues();
   detected.clear();
   events.length = 0;
   ui.eventLog.replaceChildren();
@@ -1264,12 +1442,12 @@ function syncRobotMesh() {
 }
 
 function shouldSpray() {
-  if (protocolState.stopLatched || ['scanning', 'pending', 'preparing', 'isolated', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase)) return false;
+  if (protocolState.stopLatched || ['awaitingOperator', 'collectingUnknown', 'scanning', 'pending', 'preparing', 'isolated', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete'].includes(protocolState.phase)) return false;
   if (protocolState.phase === 'applying') return true;
   if (sim.tank <= 0) return false;
   if (sim.sprayMode === 'ON') return true;
   if (sim.sprayMode === 'OFF') return false;
-  return ui.modeSelect.value === 'manual' ? keys.has(' ') || keys.has('Space') : sim.running;
+  return ui.modeSelect.value === 'manual' ? keys.has(' ') || keys.has('Space') : sim.running && coverageFootprint(positionCell()).some(key => !visited.has(key));
 }
 
 function setHeading(dx, dy) {
@@ -1373,7 +1551,15 @@ function tick(dt, elapsedDt = dt) {
           sim.status = 'Punto de muestra · confirmar tratamiento';
           addEvent('Muestra alcanzada al cierre', `${protocolState.activeMissionSample?.site.id || ''} · robot detenido sin pulverizar.`);
         } else {
-          completeCoverageMission();
+          if (remainingCoverageCount() === 0) completeCoverageMission();
+          else {
+            sim.route = buildCoverageRoute();
+            sim.routeIndex = 1;
+            sim.running = sim.route.length > 1;
+            sim.sprayMode = 'AUTO';
+            drawRoute();
+            if (!sim.running) isolateProtocol('Quedan celdas pendientes sin ruta accesible.');
+          }
         }
       }
     } else {
@@ -1390,11 +1576,20 @@ function tick(dt, elapsedDt = dt) {
 }
 
 function startMission() {
+  if (!retainedSamplesLoaded) {
+    toast('Espera a que se verifique el historial de muestras recogidas.');
+    loadRetainedSamples();
+    return;
+  }
+  if (!protocolsLoaded) {
+    toast('Espera a que cargue el catálogo de protocolos aprobados.');
+    return;
+  }
   if (protocolState.stopLatched) {
     toast('Paro seguro activo. Reinicia la misión tras verificar el área.');
     return;
   }
-  if (['scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) {
+  if (['awaitingOperator', 'collectingUnknown', 'scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) {
     toast('La misión está atendiendo muestras. Usa la acción indicada en el panel de protocolo.');
     return;
   }
@@ -1421,8 +1616,9 @@ function startMission() {
 }
 
 function selectSceneDestination(event) {
+  if ($('residueEditor').open && $('residueAction').value !== 'navigate') { editResidueAtPointer(event); return; }
   if (!auth.user || auth.user.role === 'observer' || ui.modeSelect.value !== 'auto') return;
-  if (['scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) return;
+  if (['awaitingOperator', 'collectingUnknown', 'scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) return;
   const bounds = renderer.domElement.getBoundingClientRect();
   const pointer = new THREE.Vector2((event.clientX - bounds.left) / bounds.width * 2 - 1, -((event.clientY - bounds.top) / bounds.height) * 2 + 1);
   const raycaster = new THREE.Raycaster();
@@ -1460,7 +1656,7 @@ ui.pauseBtn.addEventListener('click', () => {
 });
 ui.resetBtn.addEventListener('click', () => resetSimulation(false));
 ui.sprayBtn.addEventListener('click', () => {
-  if (protocolState.stopLatched || ['scanning', 'pending', 'preparing', 'applying', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) {
+  if (protocolState.stopLatched || ['awaitingOperator', 'collectingUnknown', 'scanning', 'pending', 'preparing', 'applying', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) {
     toast('Pulverización bloqueada por el estado del protocolo.');
     return;
   }
@@ -1519,7 +1715,7 @@ renderer.domElement.addEventListener('click', selectSceneDestination);
 
 document.addEventListener('keydown', (event) => {
   if (!auth.user || auth.user.role === 'observer') return;
-  if (protocolState.stopLatched || ['scanning', 'pending', 'preparing', 'applying', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) return;
+  if (protocolState.stopLatched || ['awaitingOperator', 'collectingUnknown', 'scanning', 'pending', 'preparing', 'applying', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space'].includes(event.key)) event.preventDefault();
   keys.add(event.key);
@@ -1582,12 +1778,14 @@ async function loadReports() {
 async function retainUnknownSample(item = null) {
   const site = item?.site || protocolState.site;
   const location = site || positionCell();
+  const signatureId = site?.signature_id || DEMO_SAMPLES.unknown.signature_id;
   try {
     const data = await api('/api/samples', {
       method: 'POST',
       body: JSON.stringify({
         scenario: ui.scenarioSelect.value,
         site_id: site?.id || `MANUAL-${Date.now()}`,
+        signature_id: signatureId,
         sample_type: 'unknown',
         classification: DEMO_SAMPLES.unknown.classification,
         location_x: location.x,
@@ -1616,11 +1814,18 @@ async function loadRetainedSamples() {
   if (!auth.user) return;
   try {
     const data = await api('/api/samples');
+    collectedResidues.clear();
+    for (const sample of data.samples) {
+      const site = { id: sample.site_id, signature_id: sample.signature_id, x: sample.location_x, y: sample.location_y };
+      collectedResidues.set(collectedResidueKey(sample.scenario, site), sample);
+    }
+    retainedSamplesLoaded = true;
+    restoreCollectedResidues();
     ui.retainedSamples.replaceChildren();
     if (!data.samples.length) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
-      cell.colSpan = 5;
+      cell.colSpan = 6;
       cell.textContent = 'No hay muestras retenidas.';
       row.appendChild(cell);
       ui.retainedSamples.appendChild(row);
@@ -1632,7 +1837,8 @@ async function loadRetainedSamples() {
         sample.sample_code,
         SCENARIOS[sample.scenario]?.title.split(' · ')[0] || sample.scenario,
         `${sample.site_id} · ${sample.location_x},${sample.location_y}`,
-        'Retenida para laboratorio',
+        sample.signature_id,
+        sample.approved_protocol_code ? `Protocolo agregado · ${sample.approved_protocol_code}` : 'Retenida para laboratorio',
         new Date(sample.created_at).toLocaleString()
       ];
       for (const value of values) {
@@ -1694,6 +1900,30 @@ ui.userForm.addEventListener('submit', async (event) => {
   }
 });
 
+ui.protocolForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (auth.user?.role !== 'admin') return;
+  try {
+    const data = await api('/api/protocols', {
+      method: 'POST',
+      body: JSON.stringify({
+        signature_id: ui.protocolSignature.value.trim(),
+        classification: ui.protocolClassification.value.trim(),
+        protocol_code: ui.protocolCodeInput.value.trim(),
+        product_code: ui.protocolProduct.value.trim(),
+        dose_profile: ui.protocolDoseProfile.value.trim(),
+        cartridge_id: ui.protocolCartridge.value
+      })
+    });
+    toast(`Protocolo ${data.protocol.protocol_code} guardado para ${data.protocol.signature_id}.`);
+    ui.protocolForm.reset();
+    await loadApprovedProtocols();
+    loadRetainedSamples();
+  } catch (error) {
+    toast(error.message);
+  }
+});
+
 function resizeScene() {
   const { width, height } = ui.scene.getBoundingClientRect();
   if (!width || !height) return;
@@ -1712,6 +1942,11 @@ function loop(timestamp) {
   updateRobotProcess(dt);
   controls.update();
   renderer.render(scene, camera);
+  if (inspectionRenderer && protocolState.site) {
+    inspectionCamera.position.set(worldX(sim.position.x), 0.65, worldZ(sim.position.y));
+    inspectionCamera.lookAt(worldX(protocolState.site.x + 0.5), 0.02, worldZ(protocolState.site.y + 0.5));
+    inspectionRenderer.render(scene, inspectionCamera);
+  }
   if (timestamp - lastUiUpdate > 120) {
     updateUI();
     lastUiUpdate = timestamp;
@@ -1719,10 +1954,171 @@ function loop(timestamp) {
   requestAnimationFrame(loop);
 }
 
+
+let inspectionRenderer = null;
+const inspectionCamera = new THREE.PerspectiveCamera(65, 2, 0.05, 80);
+function closeInspectionCamera() {
+  if (inspectionRenderer) {
+    inspectionRenderer.dispose();
+    inspectionRenderer.domElement.remove();
+    inspectionRenderer = null;
+  }
+  $('inspectionView').hidden = true;
+  $('inspectionCameraBtn').textContent = 'Activar cámara simulada';
+}
+function openInspectionCamera(automatic = false) {
+  if (protocolState.phase !== 'awaitingOperator' || auth.user?.role === 'observer') return;
+  if (inspectionRenderer) return;
+  inspectionRenderer = new THREE.WebGLRenderer({ antialias: true });
+  inspectionRenderer.setSize(480, 240);
+  inspectionRenderer.domElement.style.cssText = 'width:100%;height:auto';
+  $('inspectionView').appendChild(inspectionRenderer.domElement);
+  $('inspectionView').hidden = false;
+  $('inspectionCameraBtn').textContent = 'Apagar cámara simulada';
+  addEvent(automatic ? 'Cámara activada automáticamente' : 'Cámara activada por operador', 'Vista simulada del residuo; no identifica corrosividad.');
+}
+function presentUnknownDecision() {
+  sim.running = false;
+  sim.spraying = false;
+  sim.sprayMode = 'OFF';
+  const panel = $('unknownDecision');
+  panel.hidden = false;
+  try { openInspectionCamera(true); }
+  catch {
+    closeInspectionCamera();
+    toast('No se pudo abrir la cámara simulada. Puedes elegir recoger o evitar la zona.');
+  }
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  panel.tabIndex = -1;
+  panel.focus({ preventScroll: true });
+}
+$('inspectionCameraBtn').addEventListener('click', () => {
+  if (protocolState.phase !== 'awaitingOperator' || auth.user?.role === 'observer') return;
+  if (inspectionRenderer) closeInspectionCamera();
+  else openInspectionCamera();
+});
+async function decideUnknown(collect) {
+  if (protocolState.phase !== 'awaitingOperator' || auth.user?.role === 'observer') return;
+  const item = protocolState.activeMissionSample;
+  const site = protocolState.site;
+  protocolState.phase = 'collectingUnknown';
+  $('unknownDecision').hidden = true;
+  closeInspectionCamera();
+  updateUI();
+  if (collect) {
+    addEvent('Toma autorizada por operador', `${site?.id || 'Prueba manual'} · registro de muestra para laboratorio.`);
+    const sample = await retainUnknownSample(item);
+    if (protocolState.site !== site || protocolState.phase !== 'collectingUnknown') return;
+    if (!sample) { isolateProtocol('No se pudo confirmar la custodia.', false); return; }
+    if (item) item.status = 'lab';
+  } else {
+    if (item) item.status = 'skipped';
+    addEvent('Toma rechazada por operador', `${site?.id || 'Prueba manual'} · zona excluida; sin contacto ni producto.`);
+  }
+  protocolState.phase = protocolState.autoSample ? 'queuedUnknown' : 'complete';
+  renderMissionSamples();
+  updateUI();
+  resumeCoverageAfterSample();
+}
+$('collectUnknownBtn').addEventListener('click', () => decideUnknown(true));
+$('skipUnknownBtn').addEventListener('click', () => decideUnknown(false));
+
 const resizeObserver = new ResizeObserver(resizeScene);
+function canEditResidues() {
+  if (!auth.user || auth.user.role === 'observer') { toast('Solo administrador u operador pueden configurar residuos.'); return false; }
+  if (sim.running || sim.elapsed > 0 || protocolState.phase !== 'idle') {
+    toast('Pulsa Reiniciar antes de cambiar los residuos de la misión.'); return false;
+  }
+  return true;
+}
+function saveResidues() {
+  try {
+    localStorage.setItem(residueStorageKey, JSON.stringify(Object.fromEntries(Object.entries(SCENARIOS).map(([key, value]) => [key, value.samples]))));
+  } catch { toast('Cambio aplicado, pero el navegador no pudo guardarlo para otra sesión.'); }
+  resetSimulation(true);
+  renderResidueEditor();
+}
+function removeResidue(id) {
+  if (!canEditResidues()) return;
+  const scenario = SCENARIOS[ui.scenarioSelect.value];
+  scenario.samples = scenario.samples.filter(site => site.id !== id);
+  saveResidues();
+}
+function renderResidueEditor() {
+  const list = $('residueList');
+  list.replaceChildren();
+  const observer = !auth.user || auth.user.role === 'observer';
+  for (const id of ['residueAction', 'residueType', 'residueSignature', 'clearResiduesBtn', 'restoreResiduesBtn']) $(id).disabled = observer;
+  if (observer) $('residueAction').value = 'navigate';
+  $('residueSignature').disabled = observer || $('residueType').value !== 'unknown';
+  for (const site of SCENARIOS[ui.scenarioSelect.value].samples) {
+    const row = document.createElement('tr');
+    const match = resolveSampleProtocol(site.type, site);
+    for (const value of [`${site.id} (${site.x}, ${site.y})`, site.signature_id || 'Referencia demo', match.protocol || 'Desconocido']) {
+      const cell = document.createElement('td'); cell.textContent = value; row.appendChild(cell);
+    }
+    const actions = document.createElement('td');
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Quitar'; remove.disabled = observer;
+    remove.addEventListener('click', () => removeResidue(site.id)); actions.appendChild(remove);
+    if (site.type === 'unknown' && auth.user?.role === 'admin') {
+      const register = document.createElement('button'); register.type = 'button'; register.textContent = 'Registrar protocolo';
+      register.addEventListener('click', () => {
+        ui.protocolSignature.value = site.signature_id;
+        ui.protocolForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        ui.protocolClassification.focus({ preventScroll: true });
+      }); actions.appendChild(register);
+    }
+    row.appendChild(actions); list.appendChild(row);
+  }
+  if (!list.children.length) {
+    const row = document.createElement('tr'), cell = document.createElement('td');
+    cell.colSpan = 4; cell.textContent = 'Sin residuos. Selecciona Colocar residuo y haz clic en el mapa.';
+    row.appendChild(cell); list.appendChild(row);
+  }
+}
+function editResidueAtPointer(event) {
+  if (!$('residueEditor').open) return;
+  if (!canEditResidues()) return;
+  const bounds = renderer.domElement.getBoundingClientRect();
+  const pointer = new THREE.Vector2((event.clientX - bounds.left) / bounds.width * 2 - 1, 1 - (event.clientY - bounds.top) / bounds.height * 2);
+  const ray = new THREE.Raycaster(); ray.setFromCamera(pointer, camera);
+  const hit = ray.intersectObject(floor)[0]; if (!hit) return;
+  const x = Math.floor((hit.point.x + worldWidth / 2) * scale / cellSize);
+  const y = Math.floor((hit.point.z + worldDepth / 2) * scale / cellSize);
+  const scenario = SCENARIOS[ui.scenarioSelect.value];
+  if ($('residueAction').value === 'remove') {
+    const nearest = [...scenario.samples].sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0];
+    if (!nearest || Math.hypot(nearest.x - x, nearest.y - y) > 2) { toast('Haz clic cerca de un residuo o usa Quitar en la tabla.'); return; }
+    removeResidue(nearest.id); return;
+  }
+  if (blocked(x, y) || (x === 1 && y === 1)) { toast('Elige suelo libre, fuera de obstáculos y del inicio del robot.'); return; }
+  if (scenario.samples.some(site => site.x === x && site.y === y)) { toast('Ya hay un residuo en esa celda.'); return; }
+  const type = $('residueType').value;
+  const signature = $('residueSignature').value.trim();
+  if (type === 'unknown' && !/^[A-Za-z0-9][A-Za-z0-9._-]{1,59}$/.test(signature)) {
+    toast('Escribe una firma de 2 a 60 caracteres: letras, números, punto, guion o guion bajo.'); return;
+  }
+  scenario.samples.push({ id: `R-${crypto.randomUUID().slice(0, 18)}`, x, y, type, ...(type === 'unknown' ? { signature_id: signature } : {}) });
+  saveResidues();
+  toast('Residuo colocado. Puedes colocar más o elegir Navegar para iniciar.');
+}
+$('residueType').addEventListener('change', renderResidueEditor);
+$('residueEditor').addEventListener('toggle', () => {
+  if (!$('residueEditor').open) $('residueAction').value = 'navigate';
+});
+$('clearResiduesBtn').addEventListener('click', () => {
+  if (!canEditResidues()) return;
+  SCENARIOS[ui.scenarioSelect.value].samples = []; saveResidues();
+});
+$('restoreResiduesBtn').addEventListener('click', () => {
+  if (!canEditResidues()) return;
+  SCENARIOS[ui.scenarioSelect.value].samples = defaultResidues[ui.scenarioSelect.value].map(site => ({ ...site })); saveResidues();
+});
+ui.scenarioSelect.addEventListener('change', renderResidueEditor);
 resizeObserver.observe(ui.scene);
 buildScenario();
 resetSimulation(true);
+renderResidueEditor();
 resizeScene();
 ui.loading.classList.add('hidden');
 restoreSession();
