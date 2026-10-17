@@ -382,7 +382,7 @@ document.addEventListener('keyup',(e)=>{keys.delete(e.key);});
 
 async function saveReport(){
   try{
-    const payload={scenario:els.scenarioSelect.value,mode:els.modeSelect.value,algorithm:els.algorithmSelect.value,duration_seconds:Number(sim.elapsed.toFixed(2)),coverage_percent:coveragePercent(),obstacles_detected:sim.detected.size,distance_m:Number(sim.distance.toFixed(2)),spray_seconds:Number(sim.spraySeconds.toFixed(2)),battery_percent:Number(sim.battery.toFixed(1)),tank_percent:Number(sim.tank.toFixed(1)),sensor_snapshot:{...sim.sensors},notes:'Simulación CleanBot 2.0'};
+    const payload={scenario:els.scenarioSelect.value,mode:els.modeSelect.value,algorithm:els.algorithmSelect.value,duration_seconds:Number(sim.elapsed.toFixed(2)),coverage_percent:coveragePercent(),obstacles_detected:sim.detected.size,distance_m:Number(sim.distance.toFixed(2)),spray_seconds:Number(sim.spraySeconds.toFixed(2)),battery_percent:Number(sim.battery.toFixed(1)),tank_percent:Number(sim.tank.toFixed(1)),sensor_snapshot:{...sim.sensors},notes:'Simulación SumaKlean 2.0'};
     const data=await api('/api/reports',{method:'POST',body:JSON.stringify(payload)});toast(`Reporte #${data.report_id} guardado en SQLite`);addEvent('Reporte guardado',`ID ${data.report_id} persistido en base de datos.`);loadReports();
   }catch(err){toast(err.message);}
 }

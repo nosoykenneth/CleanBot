@@ -1,18 +1,19 @@
-# CleanBot Sim 2.0 — Simulación funcional avanzada
+# SumaKlean Sim 2.0 — Simulación funcional avanzada
 
-Este proyecto aporta el backend de la demostración CleanBot: autenticación por perfiles, administración de usuarios y persistencia de reportes en **SQLite**. Al ejecutar `run.bat` o `run.sh`, el servidor abre la experiencia web 3D de la carpeta principal, que integra esas funciones con la navegación y la telemetría. El panel 2D original sigue disponible en `/avanzada/`.
+Este proyecto aporta el backend de la demostración SumaKlean: autenticación por perfiles, administración de usuarios y persistencia de reportes en **SQLite**. Al ejecutar `run.bat` o `run.sh`, el servidor abre la experiencia web 3D de la carpeta principal, que integra esas funciones con la navegación y la telemetría. El panel 2D original sigue disponible en `/avanzada/`.
 
 ## Funciones implementadas
 
 1. **Experiencia 3D**: habitación y robot modular representados en Three.js, con escenarios de hospital, industria y bodega.
 2. **Navegación**: cobertura automática o selección de destino, con A* y Dijkstra; control manual con WASD o flechas.
-3. **Sensores simulados**: ultrasónico frontal/izquierdo/derecho, temperatura, humedad, VOC, batería y nivel de tanque.
-4. **Base de datos SQLite**: reportes con cobertura, tiempo, distancia, obstáculos, pulverización y snapshot de sensores.
-5. **Usuarios y perfiles**:
+3. **Cámara simulada**: vista frontal desde el robot hacia los residuos en su campo visual; muestra conceptual, no identifica sustancias.
+4. **Sensores simulados**: ultrasónico frontal/izquierdo/derecho, temperatura, humedad, VOC, batería y nivel de tanque.
+5. **Base de datos SQLite**: reportes con cobertura, tiempo, distancia, obstáculos, pulverización y snapshot de sensores.
+6. **Usuarios y perfiles**:
    - `admin`: simula, guarda reportes y crea usuarios.
    - `operator`: simula y guarda sus reportes.
    - `observer`: visualiza la simulación y reportes sin operar el robot.
-6. **Webots**: carpeta `webots/` con un mundo de demostración independiente y un controlador Python para un robot diferencial con sensor frontal.
+7. **Webots**: carpeta `webots/` con un mundo de demostración independiente y un controlador Python para un robot diferencial con sensor frontal.
 
 ## Ejecutar en Windows
 

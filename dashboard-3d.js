@@ -142,27 +142,27 @@ scene.add(keyLight);
 
 const materials = {
   floor: new THREE.MeshStandardMaterial({ color: '#e9ece2', roughness: 0.94 }),
-  wall: new THREE.MeshStandardMaterial({ color: '#edf1e7', roughness: 0.9 }),
-  trim: new THREE.MeshStandardMaterial({ color: '#9fb9aa', roughness: 0.75 }),
-  robot: new THREE.MeshStandardMaterial({ color: '#176d5d', roughness: 0.42, metalness: 0.16 }),
-  robotLight: new THREE.MeshStandardMaterial({ color: '#bce363', roughness: 0.36, emissive: '#243712', emissiveIntensity: 0.25 }),
+  wall: new THREE.MeshStandardMaterial({ color: '#eaf2f5', roughness: 0.9 }),
+  trim: new THREE.MeshStandardMaterial({ color: '#9ab8c8', roughness: 0.75 }),
+  robot: new THREE.MeshStandardMaterial({ color: '#103765', roughness: 0.42, metalness: 0.16 }),
+  robotLight: new THREE.MeshStandardMaterial({ color: '#08a9c7', roughness: 0.36, emissive: '#063850', emissiveIntensity: 0.25 }),
   white: new THREE.MeshStandardMaterial({ color: '#f7f8f2', roughness: 0.48 }),
   dark: new THREE.MeshStandardMaterial({ color: '#273934', roughness: 0.74 }),
   steel: new THREE.MeshStandardMaterial({ color: '#9baea4', roughness: 0.38, metalness: 0.55 }),
   bed: new THREE.MeshStandardMaterial({ color: '#f7f5ec', roughness: 0.85 }),
-  linen: new THREE.MeshStandardMaterial({ color: '#8db7ad', roughness: 0.82 }),
+  linen: new THREE.MeshStandardMaterial({ color: '#8fcfca', roughness: 0.82 }),
   coral: new THREE.MeshStandardMaterial({ color: '#cf8068', roughness: 0.75 }),
   glass: new THREE.MeshStandardMaterial({ color: '#95c5c1', roughness: 0.22, metalness: 0.25 }),
-  casing: new THREE.MeshStandardMaterial({ color: '#344640', roughness: 0.65, metalness: 0.22 }),
+  casing: new THREE.MeshStandardMaterial({ color: '#163e60', roughness: 0.65, metalness: 0.22 }),
   sensor: new THREE.MeshStandardMaterial({ color: '#72c5d0', roughness: 0.24, emissive: '#10434a', emissiveIntensity: 0.5 }),
-  cartridgeA: new THREE.MeshStandardMaterial({ color: '#6eaa9c', roughness: 0.4, metalness: 0.12 }),
+  cartridgeA: new THREE.MeshStandardMaterial({ color: '#19b99b', roughness: 0.4, metalness: 0.12 }),
   cartridgeB: new THREE.MeshStandardMaterial({ color: '#d4a75f', roughness: 0.4, metalness: 0.12 }),
   cartridgeC: new THREE.MeshStandardMaterial({ color: '#93aab3', roughness: 0.4, metalness: 0.12 }),
   warning: new THREE.MeshStandardMaterial({ color: '#c84f43', roughness: 0.36, emissive: '#46150f', emissiveIntensity: 0.2 }),
   processFluid: new THREE.MeshStandardMaterial({ color: '#8fcfc1', roughness: 0.24, transparent: true, opacity: 0.72 }),
-  hose: new THREE.MeshStandardMaterial({ color: '#344f49', roughness: 0.5, metalness: 0.12 }),
+  hose: new THREE.MeshStandardMaterial({ color: '#235b73', roughness: 0.5, metalness: 0.12 }),
   zone: new THREE.MeshBasicMaterial({ color: '#e3bb66', transparent: true, opacity: 0.2, depthWrite: false }),
-  coverage: new THREE.MeshBasicMaterial({ color: '#8fbd70', transparent: true, opacity: 0.49, depthWrite: false })
+  coverage: new THREE.MeshBasicMaterial({ color: '#19b99b', transparent: true, opacity: 0.49, depthWrite: false })
 };
 
 function box(parent, material, x, y, z, width, height, depth, castShadow = true) {
@@ -1880,7 +1880,7 @@ async function saveReport() {
         })),
         sample_classification: protocolState.match?.classification || (protocolState.sample === 'unknown' ? 'Señal no identificada' : 'Sin muestra')
       },
-      notes: protocolState.match ? `Demo ${protocolState.match.protocol} · ${protocolState.phase}` : 'Simulación 3D CleanBot'
+      notes: protocolState.match ? `Demo ${protocolState.match.protocol} · ${protocolState.phase}` : 'Simulación 3D SumaKlean'
     };
     const data = await api('/api/reports', { method: 'POST', body: JSON.stringify(payload) });
     toast(`Reporte #${data.report_id} guardado en SQLite.`);
@@ -1996,7 +1996,7 @@ ui.downloadReportsBtn.addEventListener('click', async () => {
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'cleanbot_reportes.csv';
+    link.download = 'sumaklean_reportes.csv';
     link.click();
     URL.revokeObjectURL(url);
   } catch (error) {
@@ -2078,10 +2078,56 @@ function loop(timestamp) {
   updateRobotProcess(dt);
   controls.update();
   renderer.render(scene, camera);
-  if (inspectionRenderer && protocolState.site) {
-    inspectionCamera.position.set(worldX(sim.position.x), 0.65, worldZ(sim.position.y));
-    inspectionCamera.lookAt(worldX(protocolState.site.x + 0.5), 0.02, worldZ(protocolState.site.y + 0.5));
-    inspectionRenderer.render(scene, inspectionCamera);
+  if (inspectionRenderer) {
+    const bounds = inspectionRenderer.domElement.getBoundingClientRect();
+    if (bounds.width && bounds.height) {
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      if (inspectionRenderer.domElement.width !== Math.round(bounds.width * pixelRatio)
+        || inspectionRenderer.domElement.height !== Math.round(bounds.height * pixelRatio)) {
+        inspectionRenderer.setPixelRatio(pixelRatio);
+        inspectionRenderer.setSize(bounds.width, bounds.height, false);
+      }
+      inspectionCamera.aspect = bounds.width / bounds.height;
+      inspectionCamera.updateProjectionMatrix();
+
+      const cameraPosition = robotMesh.localToWorld(new THREE.Vector3(0, 0.55, 0.405));
+      const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(robotMesh.quaternion).setY(0).normalize();
+      let inspectionSite = protocolState.site;
+      let closestDistance = Infinity;
+      if (!inspectionSite) {
+        const halfFovTangent = Math.tan(THREE.MathUtils.degToRad(52));
+        for (const site of SCENARIOS[ui.scenarioSelect.value].samples) {
+          const center = cellCenter(site.x, site.y);
+          const dx = center.x - cameraPosition.x;
+          const dz = center.z - cameraPosition.z;
+          const distanceSquared = dx * dx + dz * dz;
+          const along = dx * forward.x + dz * forward.z;
+          const lateralSquared = distanceSquared - along * along;
+          if (along > 0 && lateralSquared <= along * along * halfFovTangent ** 2 && distanceSquared < closestDistance) {
+            inspectionSite = site;
+            closestDistance = distanceSquared;
+          }
+        }
+      }
+      const focus = inspectionSite
+        ? cellCenter(inspectionSite.x, inspectionSite.y)
+        : cameraPosition.clone().addScaledVector(forward, 1.5);
+      inspectionCamera.position.copy(cameraPosition);
+      inspectionCamera.lookAt(focus.x, 0.02, focus.z);
+
+      const hiddenObjects = [coverageGroup, routeGroup, sampleMarker, zoneGroup, robotModel];
+      const visibility = hiddenObjects.map((object) => object.visible);
+      const siteMarkers = [...sampleSiteVisuals.values()].flatMap(({ patch, ring, marker }) => [patch, ring, marker]);
+      const markerVisibility = siteMarkers.map((object) => object.visible);
+      hiddenObjects.forEach((object) => { object.visible = false; });
+      siteMarkers.forEach((object) => { object.visible = false; });
+      try {
+        inspectionRenderer.render(scene, inspectionCamera);
+      } finally {
+        hiddenObjects.forEach((object, index) => { object.visible = visibility[index]; });
+        siteMarkers.forEach((object, index) => { object.visible = markerVisibility[index]; });
+      }
+    }
   }
   if (timestamp - lastUiUpdate > 120) {
     updateUI();
@@ -2092,7 +2138,7 @@ function loop(timestamp) {
 
 
 let inspectionRenderer = null;
-const inspectionCamera = new THREE.PerspectiveCamera(65, 2, 0.05, 80);
+const inspectionCamera = new THREE.PerspectiveCamera(48, 2, 0.05, 80);
 function closeInspectionCamera() {
   if (inspectionRenderer) {
     inspectionRenderer.dispose();
@@ -2105,13 +2151,13 @@ function closeInspectionCamera() {
 function openInspectionCamera(automatic = false) {
   if (protocolState.phase !== 'awaitingOperator' || auth.user?.role === 'observer') return;
   if (inspectionRenderer) return;
-  inspectionRenderer = new THREE.WebGLRenderer({ antialias: true });
-  inspectionRenderer.setSize(480, 240);
-  inspectionRenderer.domElement.style.cssText = 'width:100%;height:auto';
+  inspectionRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  inspectionRenderer.domElement.setAttribute('aria-label', 'Vista desde la cámara frontal del robot hacia el residuo');
+  inspectionRenderer.domElement.style.cssText = 'display:block;width:100%;height:auto;aspect-ratio:2/1';
   $('inspectionView').appendChild(inspectionRenderer.domElement);
   $('inspectionView').hidden = false;
   $('inspectionCameraBtn').textContent = 'Apagar cámara simulada';
-  addEvent(automatic ? 'Cámara activada automáticamente' : 'Cámara activada por operador', 'Vista simulada del residuo; no identifica corrosividad.');
+  addEvent(automatic ? 'Cámara activada automáticamente' : 'Cámara activada por operador', 'Vista frontal simulada hacia el residuo; no identifica corrosividad.');
 }
 function presentUnknownDecision() {
   sim.running = false;

@@ -1,4 +1,6 @@
-# CleanBot · Simulación 3D
+# SumaKlean · Simulación 3D
+
+**Limpieza inteligente para un futuro mejor.**
 
 Prueba de concepto para presentar un futuro robot móvil inteligente y modular de limpieza y desinfección en zonas de riesgo. La escena 3D muestra una operación conceptual; no representa hardware construido ni validación clínica.
 
@@ -6,6 +8,7 @@ Prueba de concepto para presentar un futuro robot móvil inteligente y modular d
 
 - Escenarios 3D de hospital, industria y bodega.
 - Navegación automática con rutas A* o Dijkstra, y destinos seleccionados en la escena.
+- Cámara simulada desde el frente del robot, que muestra los residuos visibles al activarse.
 - Control manual por WASD o flechas, detección simulada de obstáculos y pulverización.
 - Sensores simulados, cobertura, distancia, batería y nivel del tanque.
 - Perfiles de administrador, operador y observador.
@@ -25,6 +28,7 @@ El backend de Python usa solo su biblioteca estándar. La librería Three.js se 
 - `index.html`: interfaz principal y panel avanzado.
 - `styles.css`: diseño visual de la demo 3D.
 - `dashboard-3d.js`: escena, navegación, sensores y conexión con la API avanzada.
+- `static/sumaklean-mark.png` y `static/sumaklean-k.png`: isotipo original y K gráfica de SumaKlean.
 - `package.json`: dependencia Three.js.
 - `CleanBot_Simulacion_Avanzada/server.py`: autenticación, SQLite y reportes.
 

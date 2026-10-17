@@ -132,7 +132,7 @@ def init_db() -> None:
     )
 
     seeds = [
-        ("admin", "Administrador CleanBot", "admin", "admin123"),
+        ("admin", "Administrador SumaKlean", "admin", "admin123"),
         ("operador", "Operador Demo", "operator", "demo123"),
         ("observador", "Observador Demo", "observer", "view123"),
     ]
@@ -159,7 +159,7 @@ def public_user(row: sqlite3.Row) -> dict:
 
 
 class CleanBotHandler(BaseHTTPRequestHandler):
-    server_version = "CleanBotSim/2.0"
+    server_version = "SumaKleanSim/2.0"
 
     def log_message(self, fmt, *args):
         print(f"[{self.log_date_time_string()}] {fmt % args}")
@@ -216,6 +216,12 @@ class CleanBotHandler(BaseHTTPRequestHandler):
             rel = path.removeprefix("/avanzada/")
             if not rel:
                 rel = "index.html"
+        elif path == "/brand/sumaklean-mark.png":
+            static_root = BASE_DIR.parent / "static"
+            rel = "sumaklean-mark.png"
+        elif path == "/brand/sumaklean-k.png":
+            static_root = BASE_DIR.parent / "static"
+            rel = "sumaklean-k.png"
         elif path.startswith("/node_modules/three/"):
             static_root = BASE_DIR.parent / "node_modules" / "three"
             rel = path.removeprefix("/node_modules/three/")
@@ -244,7 +250,7 @@ class CleanBotHandler(BaseHTTPRequestHandler):
         path = parsed.path
 
         if path == "/api/health":
-            self._send_json({"ok": True, "service": "CleanBot Sim", "version": "2.0"})
+            self._send_json({"ok": True, "service": "SumaKlean Sim", "version": "2.0"})
             return
 
         if path == "/api/me":
@@ -635,7 +641,7 @@ class CleanBotHandler(BaseHTTPRequestHandler):
 def main():
     init_db()
     server = ThreadingHTTPServer((HOST, PORT), CleanBotHandler)
-    print("\nCleanBot Sim 2.0 listo")
+    print("\nSumaKlean Sim 2.0 listo")
     print(f"Abre en tu navegador: http://{HOST}:{PORT}")
     print("Usuarios demo:")
     print("  admin / admin123")

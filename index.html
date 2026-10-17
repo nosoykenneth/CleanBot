@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CleanBot | Robot móvil de limpieza y desinfección</title>
+  <title>SumaKlean | Limpieza inteligente para un futuro mejor</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="/brand/sumaklean-mark.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -15,9 +16,9 @@
 <body>
   <div id="loginOverlay" class="overlay">
     <form id="loginForm" class="login-card">
-      <div class="brand-mark">C+</div>
-      <h1>CleanBot Sim</h1>
-      <p>Acceso a la simulación 3D y consola de operación</p>
+      <img class="brand-mark" src="/brand/sumaklean-mark.png" alt="Logotipo de SumaKlean" />
+      <h1>Suma<img class="brand-k" src="/brand/sumaklean-k.png" alt="" aria-hidden="true" />lean</h1>
+      <p>Limpieza inteligente para un futuro mejor</p>
       <label>Usuario<input id="loginUser" value="operador" autocomplete="username" required></label>
       <label>Contraseña<input id="loginPass" type="password" value="demo123" autocomplete="current-password" required></label>
       <button class="primary" type="submit">Ingresar</button>
@@ -26,7 +27,7 @@
     </form>
   </div>
   <header class="topbar">
-    <a class="brand" href="#inicio" aria-label="CleanBot, inicio"><span class="brand-mark">C<span>+</span></span><span>clean<span class="brand-light">bot</span></span></a>
+    <a class="brand" href="#inicio" aria-label="SumaKlean, inicio"><img class="brand-mark" src="/brand/sumaklean-mark.png" alt="" /><span>Suma<img class="brand-k" src="/brand/sumaklean-k.png" alt="" aria-hidden="true" />lean</span></a>
     <div class="topbar-meta"><span class="live-indicator"></span> PROPUESTA DE INNOVACIÓN <span class="topbar-divider"></span> HACKATHON 2026</div>
     <div class="topbar-actions"><a class="topbar-link" href="#propuesta">Ver propuesta <span aria-hidden="true">↗</span></a><span class="user-pill"><strong id="userName">—</strong><small id="userRole">—</small></span><button id="logoutBtn" class="logout-btn" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">Salir</button></div>
   </header>
@@ -64,7 +65,7 @@
           <p id="scenarioDescription">Recorrido autónomo conceptual en una habitación de riesgo.</p>
         </div>
         <div class="legend">
-          <span><i class="dot robot-dot"></i> CleanBot</span>
+          <span><i class="dot robot-dot"></i> SumaKlean</span>
           <span><i class="dot obstacle-dot"></i> Obstáculo</span>
           <span><i class="dot cleaned-dot"></i> Cobertura</span>
           <span><i class="dot sample-dot"></i> Muestra simulada</span>
@@ -205,8 +206,8 @@
             <strong>Alerta: residuo desconocido</strong>
             <p>Robot detenido, sin toma ni producto. Ante posible corrosividad puedes evitar la zona.</p>
             <button id="inspectionCameraBtn" type="button">Activar cámara simulada</button>
-            <div id="inspectionView" hidden></div>
-            <p>Vista 3D simulada: no determina la composición ni la corrosividad.</p>
+            <div id="inspectionView" hidden aria-label="Vista desde la cámara frontal del robot hacia el residuo"></div>
+            <p>Vista frontal simulada desde el robot hacia el residuo; no determina su composición ni corrosividad.</p>
             <button id="collectUnknownBtn" type="button">Autorizar toma de muestra</button>
             <button id="skipUnknownBtn" type="button">No tomar: evitar zona y continuar</button>
           </div>
@@ -307,7 +308,7 @@
     </section>
   </main>
 
-  <footer><span>CleanBot · Robótica para entornos más seguros</span><span>SIMULACIÓN CONCEPTUAL · NO REPRESENTA VALIDACIÓN CLÍNICA</span></footer>
+  <footer><span>SumaKlean · Limpieza inteligente para un futuro mejor</span><span>SIMULACIÓN CONCEPTUAL · NO REPRESENTA VALIDACIÓN CLÍNICA</span></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="module" src="dashboard-3d.js"></script>
   <script type="module" src="/avanzada/photo-audit.js"></script>
