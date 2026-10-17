@@ -55,6 +55,12 @@ Para agregar un protocolo inicia sesión como administrador (`admin` / `admin123
 
 ## Alcance
 
+### Objetos móviles y ruta dinámica
+
+Abre **Mover objetos durante la simulación**, activa **Movimiento de objetos**, elige una camilla, gabinete, máquina u otro obstáculo en la lista (o haciendo clic sobre él) y toca suelo libre para colocar su centro. Puedes hacerlo durante el recorrido. Los giros de cámara con arrastre no colocan objetos. Cerrar el panel desactiva este modo.
+
+Se rechazan posiciones fuera del mapa o superpuestas con otros objetos, el robot y las muestras. Al mover un obstáculo se actualiza la geometría y se recalcula la cobertura desde la posición actual, conservando las celdas limpiadas y zonas excluidas. Una misión pausada permanece pausada; un paro o decisión pendiente no se levanta. Sin ruta accesible, el robot se detiene para revisar el mapa. Las posiciones modificadas duran durante esta sesión y no se guardan en SQLite ni en el navegador. Las muestras conocidas y desconocidas no se mueven con estos controles.
+
 ### Comparación de fotografías reales
 
 Abre **Auditar fotografías reales · comparación visual**. Carga tres fotos JPG, PNG o WebP: el piso limpio de referencia, el piso antes de limpiar y el piso después. Las fotos deben mantener el mismo encuadre, proporción y luz; esta versión no alinea automáticamente imágenes ni corrige perspectiva. Marca la región de suciedad arrastrando sobre la foto anterior (o usa la región central). Deja al menos 10% del encuadre fuera de esa región, con suelo sin cambios, para controlar variaciones del fondo. Confirma las condiciones y pulsa **Comparar fotografías**.

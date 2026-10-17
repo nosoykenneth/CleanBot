@@ -220,6 +220,7 @@ function clearRoute() {
 
 function buildObstacle(obstacle) {
   const group = new THREE.Group();
+  group.userData.obstacle = obstacle;
   const center = cellCenter(obstacle.x + obstacle.w / 2 - 0.5, obstacle.y + obstacle.h / 2 - 0.5);
   group.position.set(center.x, 0, center.z);
   obstacleGroup.add(group);
@@ -371,6 +372,7 @@ function buildScenario() {
   sampleSiteVisuals.clear();
   const scenario = SCENARIOS[ui.scenarioSelect.value];
   for (const obstacle of scenario.obstacles) buildObstacle(obstacle);
+  renderObstacleEditor();
   scenario.samples.forEach(buildSampleSite);
   for (const zone of scenario.zones) {
     const center = cellCenter(zone.x + zone.w / 2 - 0.5, zone.y + zone.h / 2 - 0.5);
@@ -1745,6 +1747,7 @@ function startMission() {
 }
 
 function selectSceneDestination(event) {
+  if ($('obstacleEditor').open && $('moveObstacles').checked) { moveObstacleAtPointer(event); return; }
   if ($('residueEditor').open && $('residueAction').value !== 'navigate') { editResidueAtPointer(event); return; }
   if (!auth.user || auth.user.role === 'observer' || ui.modeSelect.value !== 'auto') return;
   if (['awaitingOperator', 'collectingUnknown', 'scanning', 'pending', 'preparing', 'applying', 'queuedKnown', 'queuedUnknown', 'returnReady', 'returning', 'pendingTreatment', 'unknownComplete', 'isolated'].includes(protocolState.phase)) return;
@@ -2157,6 +2160,88 @@ $('collectUnknownBtn').addEventListener('click', () => decideUnknown(true));
 $('skipUnknownBtn').addEventListener('click', () => decideUnknown(false));
 
 const resizeObserver = new ResizeObserver(resizeScene);
+function renderObstacleEditor() {
+  const select = $('obstacleSelect');
+  const previous = select.value;
+  select.replaceChildren();
+  SCENARIOS[ui.scenarioSelect.value].obstacles.forEach((obstacle, index) => {
+    const option = document.createElement('option');
+    option.value = String(index); option.textContent = obstacle.label;
+    select.appendChild(option);
+  });
+  if ([...select.options].some(option => option.value === previous)) select.value = previous;
+  const disabled = !auth.user || auth.user.role === 'observer';
+  select.disabled = $('moveObstacles').disabled = disabled;
+  if (disabled) $('moveObstacles').checked = false;
+}
+function obstaclePlacementAllowed(obstacle, x, y) {
+  if (x < 0 || y < 0 || x + obstacle.w > cols || y + obstacle.h > rows) return false;
+  const scenario = SCENARIOS[ui.scenarioSelect.value];
+  if (scenario.obstacles.some(other => other !== obstacle && x < other.x + other.w && x + obstacle.w > other.x && y < other.y + other.h && y + obstacle.h > other.y)) return false;
+  const nearRectangle = (point, margin) => point.x > x - margin && point.x < x + obstacle.w + margin && point.y > y - margin && point.y < y + obstacle.h + margin;
+  if (nearRectangle(sim.position, 0.85)) return false;
+  return !scenario.samples.some(site => nearRectangle({ x: site.x + 0.5, y: site.y + 0.5 }, 1.25));
+}
+function replanAfterObstacleMove() {
+  const running = sim.running;
+  const purpose = sim.routePurpose;
+  const goal = sim.route.at(-1);
+  sim.running = false;
+  sim.spraying = false;
+  sim.completed = false;
+  sim.route = purpose === 'sample-return' && goal ? findPath(positionCell(), goal) : buildCoverageRoute();
+  sim.routeIndex = sim.route.length > 1 ? 1 : sim.route.length;
+  if (sim.route.length < 2) sim.sprayMode = 'OFF';
+  drawRoute();
+  const protocolBusy = !['idle', 'complete', 'queuedKnown', 'queuedUnknown', 'returning'].includes(protocolState.phase);
+  if (!protocolBusy && !protocolState.stopLatched) {
+    sim.running = running && sim.route.length > 1;
+    sim.status = sim.route.length > 1 ? (running ? 'Ruta recalculada · en operación' : 'Ruta recalculada · en pausa') : 'Sin ruta pendiente accesible · revisar mapa';
+  }
+  updateSensors(); updateUI();
+  addEvent('Ruta recalculada por objeto movido', `${sim.route.length} puntos. Se conserva la cobertura y las zonas excluidas.`);
+}
+let objectPointerStart = null;
+renderer.domElement.addEventListener('pointerdown', event => { objectPointerStart = { x: event.clientX, y: event.clientY }; });
+function moveObstacleAtPointer(event) {
+  if (!auth.user || auth.user.role === 'observer' || !$('obstacleEditor').open || !$('moveObstacles').checked) return;
+  if (objectPointerStart && Math.hypot(event.clientX - objectPointerStart.x, event.clientY - objectPointerStart.y) > 8) return;
+  const bounds = renderer.domElement.getBoundingClientRect();
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2((event.clientX - bounds.left) / bounds.width * 2 - 1, 1 - (event.clientY - bounds.top) / bounds.height * 2), camera);
+  const objectHit = ray.intersectObjects(obstacleGroup.children, true)[0];
+  if (objectHit) {
+    let object = objectHit.object;
+    while (object && !object.userData.obstacle) object = object.parent;
+    if (object) {
+      const index = SCENARIOS[ui.scenarioSelect.value].obstacles.indexOf(object.userData.obstacle);
+      $('obstacleSelect').value = String(index);
+      $('obstacleMoveStatus').textContent = `${object.userData.obstacle.label} seleccionado. Toca suelo libre para moverlo.`;
+      return;
+    }
+  }
+  const hit = ray.intersectObject(floor)[0]; if (!hit) return;
+  const obstacle = SCENARIOS[ui.scenarioSelect.value].obstacles[Number($('obstacleSelect').value)];
+  if (!obstacle) return;
+  const x = Math.round((hit.point.x + worldWidth / 2) * scale / cellSize - obstacle.w / 2);
+  const y = Math.round((hit.point.z + worldDepth / 2) * scale / cellSize - obstacle.h / 2);
+  if (!obstaclePlacementAllowed(obstacle, x, y)) {
+    $('obstacleMoveStatus').textContent = 'Posición no válida: deja espacio respecto al robot, muestras, otros objetos y bordes.';
+    return;
+  }
+  obstacle.x = x; obstacle.y = y;
+  clearGeometries(obstacleGroup);
+  SCENARIOS[ui.scenarioSelect.value].obstacles.forEach(buildObstacle);
+  replanAfterObstacleMove();
+  $('obstacleMoveStatus').textContent = `${obstacle.label} movido a ${x}, ${y}. Ruta recalculada.`;
+}
+$('obstacleEditor').addEventListener('toggle', () => {
+  if (!$('obstacleEditor').open) $('moveObstacles').checked = false;
+});
+$('moveObstacles').addEventListener('change', () => {
+  if ($('moveObstacles').checked) $('residueAction').value = 'navigate';
+  $('obstacleMoveStatus').textContent = $('moveObstacles').checked ? 'Selecciona un objeto y toca el suelo para moverlo.' : 'Modo desactivado.';
+});
 function canEditResidues() {
   if (!auth.user || auth.user.role === 'observer') { toast('Solo administrador u operador pueden configurar residuos.'); return false; }
   if (sim.running || sim.elapsed > 0 || protocolState.phase !== 'idle') {

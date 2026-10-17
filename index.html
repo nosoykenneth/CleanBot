@@ -71,6 +71,15 @@
         </div>
       </div>
 
+      <details class="residue-editor" id="obstacleEditor">
+        <summary>Mover objetos durante la simulación</summary>
+        <p>Activa el modo, selecciona un objeto en la lista o en la escena y toca el suelo para colocar su centro. El robot recalcula sin borrar la cobertura. Las muestras permanecen en su posición.</p>
+        <div class="residue-tools">
+          <label><input id="moveObstacles" type="checkbox"> Activar movimiento de objetos</label>
+          <label>Objeto<select id="obstacleSelect"></select></label>
+        </div>
+        <p id="obstacleMoveStatus" aria-live="polite">Modo desactivado.</p>
+      </details>
       <details class="residue-editor" id="residueEditor">
         <summary>Configurar residuos del escenario</summary>
         <p>Configura antes de iniciar. Para cambiar una misión en curso, pulsa Reiniciar. Los cambios se guardan en este navegador por escenario.</p>

@@ -17,6 +17,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
     fs.readFile(target, (error, bytes) => {
       if (error) { res.writeHead(404); res.end(); return; }
       res.setHeader('Content-Type', ({ '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css' })[path.extname(target)] || 'application/octet-stream');
+      if (relative === 'dashboard-3d.js') bytes = Buffer.from(bytes.toString() + `\nglobalThis.__obstacleTest = { auth, sim, ui, SCENARIOS, visited, renderObstacleEditor, obstaclePlacementAllowed, moveObstacleAtPointer, point(x,y) { const p = new THREE.Vector3(worldX(x),0,worldZ(y)).project(camera); const b=renderer.domElement.getBoundingClientRect(); return {clientX:b.left+(p.x+1)*b.width/2,clientY:b.top+(1-p.y)*b.height/2}; } };`);
       res.end(bytes);
     });
   });
@@ -57,6 +58,21 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
       return {status:document.getElementById('photoResult').textContent,exportEnabled:!document.getElementById('photoExport').disabled};
     })()`);
     assert(output.status.includes('50.0%'), output.status); assert(output.exportEnabled);
+    const moved = await evaluate(`(() => {
+      const t=globalThis.__obstacleTest; if(!t) throw Error('Dashboard not initialized');
+      t.auth.user={role:'operator'}; t.renderObstacleEditor();
+      document.getElementById('obstacleEditor').open=true; document.getElementById('moveObstacles').checked=true;
+      const scenario=t.SCENARIOS[t.ui.scenarioSelect.value], obstacle=scenario.obstacles[0];
+      const samples=JSON.stringify(scenario.samples); t.visited.add('1,1'); t.sim.running=true;
+      for(let y=1;y<15;y++) for(let x=2;x<29;x++) {
+        if(!t.obstaclePlacementAllowed(obstacle,x,y)||(x===obstacle.x&&y===obstacle.y)) continue;
+        document.getElementById('obstacleSelect').value='0';
+        t.moveObstacleAtPointer(t.point(x+obstacle.w/2,y+obstacle.h/2));
+        if(obstacle.x===x&&obstacle.y===y) return {moved:true, running:t.sim.running,coverageKept:t.visited.has('1,1'),samplesKept:JSON.stringify(scenario.samples)===samples};
+      }
+      return {moved:false};
+    })()`);
+    assert(moved.moved && moved.running && moved.coverageKept && moved.samplesKept, JSON.stringify(moved));
     const screenshot = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
     const screenshotPath = path.join(profile, 'photo-audit.png'); fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'));
     const staleCleared = await evaluate(`document.getElementById('photoThreshold').dispatchEvent(new Event('input')); document.getElementById('photoExport').disabled`);
